@@ -33,7 +33,6 @@ import (
 	"github.com/grafana/loki/v3/pkg/storage/stores"
 	"github.com/grafana/loki/v3/pkg/storage/stores/shipper/bloomshipper"
 	utillog "github.com/grafana/loki/v3/pkg/util/log"
-	"github.com/grafana/loki/v3/pkg/util/ring"
 )
 
 // TODO(chaudum): Make configurable via (per-tenant?) setting.
@@ -70,7 +69,6 @@ func New(
 	bloomGateway bloomgateway.Client,
 	logger log.Logger,
 	r prometheus.Registerer,
-	rm *ring.RingManager, // Unused, please remove
 ) (*Builder, error) {
 	utillog.WarnExperimentalUse("Bloom Builder", logger)
 
@@ -87,10 +85,6 @@ func New(
 		chunkLoader:  NewStoreChunkLoader(fetcherProvider, metrics),
 		bloomGateway: bloomGateway,
 		logger:       logger,
-	}
-
-	if rm != nil {
-		b.ringWatcher = common.NewRingWatcher(rm.RingLifecycler.GetInstanceID(), rm.Ring, time.Minute, logger)
 	}
 
 	b.Service = services.NewBasicService(b.starting, b.running, b.stopping)

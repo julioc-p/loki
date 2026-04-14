@@ -28,7 +28,6 @@ import (
 	"github.com/grafana/loki/v3/pkg/storage/stores/shipper/indexshipper/tsdb"
 	"github.com/grafana/loki/v3/pkg/util/constants"
 	utillog "github.com/grafana/loki/v3/pkg/util/log"
-	"github.com/grafana/loki/v3/pkg/util/ring"
 )
 
 var (
@@ -69,7 +68,6 @@ func New(
 	bloomStore bloomshipper.StoreBase,
 	logger log.Logger,
 	r prometheus.Registerer,
-	rm *ring.RingManager, // Unused, please remove
 ) (*Planner, error) {
 	utillog.WarnExperimentalUse("Bloom Planner", logger)
 
@@ -107,11 +105,6 @@ func New(
 	)
 
 	svcs := []services.Service{p.tasksQueue}
-
-	if rm != nil {
-		p.ringWatcher = common.NewRingWatcher(rm.RingLifecycler.GetInstanceID(), rm.Ring, time.Minute, logger)
-		svcs = append(svcs, p.ringWatcher)
-	}
 
 	p.subservices, err = services.NewManager(svcs...)
 	if err != nil {

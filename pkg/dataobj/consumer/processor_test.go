@@ -3,6 +3,7 @@ package consumer
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 
 	"github.com/grafana/loki/v3/pkg/dataobj/consumer/logsobj"
+	"github.com/grafana/loki/v3/pkg/dataobj/metastore"
 	"github.com/grafana/loki/v3/pkg/logproto"
 	"github.com/grafana/loki/v3/pkg/scratch"
 
@@ -39,8 +41,9 @@ func TestProcessor_BuilderMaxAge(t *testing.T) {
 			ctx            = t.Context()
 			reg            = prometheus.NewRegistry()
 			builder        = newTestBuilder(t, reg)
+			group          = newMockBuilderGroup(builder)
 			flushCommitter = &mockFlushCommitter{}
-			proc           = newProcessor(builder, nil, flushCommitter, 5*time.Minute, 30*time.Minute, log.NewNopLogger(), reg)
+			proc           = newProcessor(group, nil, flushCommitter, 5*time.Minute, 30*time.Minute, log.NewNopLogger(), reg)
 		)
 
 		// Since no records have been pushed, the first append time should be zero,
@@ -88,8 +91,9 @@ func TestPartitionProcessor_IdleFlush(t *testing.T) {
 			ctx            = t.Context()
 			reg            = prometheus.NewRegistry()
 			builder        = newTestBuilder(t, reg)
+			group          = newMockBuilderGroup(builder)
 			flushCommitter = &mockFlushCommitter{}
-			proc           = newProcessor(builder, nil, flushCommitter, 5*time.Minute, 30*time.Minute, log.NewNopLogger(), reg)
+			proc           = newProcessor(group, nil, flushCommitter, 5*time.Minute, 30*time.Minute, log.NewNopLogger(), reg)
 		)
 
 		// The idle flush timeout has not been exceeded, no flush should occur.
@@ -133,7 +137,7 @@ func (f *failureFlusher) Flush(_ context.Context, _ builder, _ string) (string, 
 
 type failureFlushCommitter struct{}
 
-func (m *failureFlushCommitter) Flush(_ context.Context, _ builder, _ string, _ int64, _ time.Time) error {
+func (m *failureFlushCommitter) Flush(_ context.Context, _ []builder, _ string, _ int64) error {
 	return errors.New("mock error")
 }
 
@@ -144,8 +148,9 @@ func TestPartitionProcessor_Flush(t *testing.T) {
 				ctx            = t.Context()
 				reg            = prometheus.NewRegistry()
 				builder        = newTestBuilder(t, reg)
+				group          = newMockBuilderGroup(builder)
 				flushCommitter = &mockFlushCommitter{}
-				proc           = newProcessor(builder, nil, flushCommitter, 5*time.Minute, 30*time.Minute, log.NewNopLogger(), reg)
+				proc           = newProcessor(group, nil, flushCommitter, 5*time.Minute, 30*time.Minute, log.NewNopLogger(), reg)
 			)
 
 			// No flush should have occurred.
@@ -165,7 +170,6 @@ func TestPartitionProcessor_Flush(t *testing.T) {
 
 			// The following fields should be reset at the end of every flush.
 			require.True(t, proc.firstAppend.IsZero())
-			require.True(t, proc.earliestRecordTime.IsZero())
 			require.True(t, proc.lastAppend.IsZero())
 		})
 	})
@@ -176,8 +180,9 @@ func TestPartitionProcessor_Flush(t *testing.T) {
 				ctx            = t.Context()
 				reg            = prometheus.NewRegistry()
 				builder        = newTestBuilder(t, reg)
+				group          = newMockBuilderGroup(builder)
 				flushCommitter = &failureFlushCommitter{}
-				proc           = newProcessor(builder, nil, flushCommitter, 5*time.Minute, 30*time.Minute, log.NewNopLogger(), reg)
+				proc           = newProcessor(group, nil, flushCommitter, 5*time.Minute, 30*time.Minute, log.NewNopLogger(), reg)
 			)
 
 			// Process a record containing some log lines. No flush should occur.
@@ -186,39 +191,80 @@ func TestPartitionProcessor_Flush(t *testing.T) {
 			require.Equal(t, time.Now(), proc.firstAppend)
 			require.Equal(t, time.Now(), proc.lastAppend)
 			require.Equal(t, rec.Offset, proc.lastOffset)
+			wantFirstAppend := proc.firstAppend
+			wantLastAppend := proc.lastAppend
+			wantLastOffset := proc.lastOffset
 
 			// Advance time and force a flush. This flush should fail.
 			time.Sleep(time.Second)
 			require.EqualError(t, proc.flush(ctx, "forced"), "mock error")
 
-			// Despite the failure, the following fields should still be reset.
-			require.True(t, proc.firstAppend.IsZero())
-			require.True(t, proc.earliestRecordTime.IsZero())
-			require.True(t, proc.lastAppend.IsZero())
+			// Despite the failure, the following fields should remain
+			require.Equal(t, wantFirstAppend, proc.firstAppend)
+			require.Equal(t, wantLastAppend, proc.lastAppend)
+			require.Equal(t, wantLastOffset, proc.lastOffset)
 		})
+	})
+}
+
+func TestPartitionProcessor_FlushSplitsAcrossWindows(t *testing.T) {
+	// A record that carries entries from two distinct 12h TOC windows must
+	// result in two per-window builders being flushed in a single
+	// flushCommitter call.
+	synctest.Test(t, func(t *testing.T) {
+		factory, err := logsobj.NewBuilderFactory(testBuilderCfg, scratch.NewMemory(), logsobj.NewBuilderMetrics())
+		require.NoError(t, err)
+
+		var (
+			ctx            = t.Context()
+			reg            = prometheus.NewRegistry()
+			group          = NewTOCAlignedBuilderGroup(factory, math.MaxInt)
+			flushCommitter = &mockFlushCommitter{}
+			proc           = newProcessor(group, nil, flushCommitter, 5*time.Minute, 30*time.Minute, log.NewNopLogger(), reg)
+		)
+
+		w1 := time.Date(2026, time.April, 17, 0, 0, 0, 0, time.UTC)
+		w2 := w1.Add(metastore.TOCWindowSize)
+		rec := newTestRecordWithEntries(t, "tenant", w1, []push.Entry{
+			{Timestamp: w1.Add(time.Minute), Line: "window-1"},
+			{Timestamp: w2.Add(time.Minute), Line: "window-2"},
+		})
+		require.NoError(t, proc.processRecord(ctx, rec))
+		require.Len(t, group.GetBuilders(), 2, "append must create one builder per TOC window")
+
+		require.NoError(t, proc.flush(ctx, "test"))
+		require.Equal(t, 1, flushCommitter.flushes, "flushCommitter is invoked once per flush()")
+		require.Equal(t, 2, flushCommitter.lastBuilderCount, "flushCommitter must receive one builder per window")
 	})
 }
 
 // newTestBuilder returns a new logsobj.Builder with registered metrics.
 func newTestBuilder(t *testing.T, reg prometheus.Registerer) *logsobj.Builder {
-	b, err := logsobj.NewBuilder(testBuilderCfg, scratch.NewMemory())
+	metrics := logsobj.NewBuilderMetrics()
+	require.NoError(t, metrics.Register(reg))
+	b, err := logsobj.NewBuilder(testBuilderCfg, scratch.NewMemory(), metrics)
 	require.NoError(t, err)
-	require.NoError(t, b.RegisterMetrics(reg))
 	return b
 }
 
 // newTestRecord returns a new record containing the stream.
 func newTestRecord(t *testing.T, tenant string, now time.Time) *kgo.Record {
+	return newTestRecordWithEntries(t, tenant, now, []push.Entry{{
+		Timestamp: now,
+		Line:      "baz",
+	}})
+}
+
+// newTestRecordWithEntries returns a new record whose stream has the given
+// entries. The record's Kafka timestamp is set to now.
+func newTestRecordWithEntries(t *testing.T, tenant string, now time.Time, entries []push.Entry) *kgo.Record {
 	rec := kgo.Record{
 		Key:       []byte(tenant),
 		Timestamp: now,
 	}
 	stream := logproto.Stream{
-		Labels: `{foo="bar"}`,
-		Entries: []push.Entry{{
-			Timestamp: now,
-			Line:      "baz",
-		}},
+		Labels:  `{foo="bar"}`,
+		Entries: entries,
 	}
 	var err error
 	rec.Value, err = stream.Marshal()

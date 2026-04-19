@@ -233,13 +233,17 @@ func (p *processor) flush(ctx context.Context, reason string) error {
 		// Reset the state to prepare for building the next data object.
 		p.firstAppend = time.Time{}
 		p.lastAppend = time.Time{}
-		p.builder.Reset()
-		p.metrics.sizeEstimate.Set(0)
 	}()
 
 	timeWindowedBuilders := p.builder.GetBuilders()
 	p.metrics.timePartitionEstimate.Add(float64(len(timeWindowedBuilders)))
-	return p.flushCommitter.Flush(ctx, timeWindowedBuilders, reason, p.lastOffset)
+	if err := p.flushCommitter.Flush(ctx, timeWindowedBuilders, reason, p.lastOffset); err != nil {
+		return err
+	}
+
+	p.builder.Reset()
+	p.metrics.sizeEstimate.Set(0)
+	return nil
 }
 
 func (p *processor) observeRecord(rec *kgo.Record, now time.Time) {

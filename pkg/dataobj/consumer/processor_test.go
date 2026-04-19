@@ -199,6 +199,8 @@ func TestPartitionProcessor_Flush(t *testing.T) {
 			// Despite the failure, the following fields should still be reset.
 			require.True(t, proc.firstAppend.IsZero())
 			require.True(t, proc.lastAppend.IsZero())
+			// But buffered data must be preserved so a subsequent flush can retry.
+			require.NotZero(t, proc.builder.GetEstimatedSize())
 		})
 	})
 }

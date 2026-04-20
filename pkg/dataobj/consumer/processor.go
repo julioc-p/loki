@@ -2,6 +2,7 @@ package consumer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -229,21 +230,32 @@ func (p *processor) needsIdleFlush() bool {
 }
 
 func (p *processor) flush(ctx context.Context, reason string) error {
+	defer func() {
+		// Reset the state to prepare for building the next data object. The
+		// reset runs on every outcome: success (obvious), ctx canceled (we're
+		// shutting down — state is no longer needed), and panic (the process
+		// is about to crash and Kafka will replay from the last committed
+		// offset).
+		p.firstAppend = time.Time{}
+		p.lastAppend = time.Time{}
+		p.builder.Reset()
+		p.metrics.sizeEstimate.Set(0)
+	}()
+
 	timeWindowedBuilders := p.builder.GetBuilders()
 	p.metrics.timePartitionEstimate.Add(float64(len(timeWindowedBuilders)))
 	err := p.flushCommitter.Flush(ctx, timeWindowedBuilders, reason, p.lastOffset)
-	if err != nil {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, context.Canceled) {
 		return err
 	}
-
-	// Reset the state to prepare for building the next data object.
-	// we only do it on success to keep the processor's state on errors for further retries
-	p.firstAppend = time.Time{}
-	p.lastAppend = time.Time{}
-	p.builder.Reset()
-	p.metrics.sizeEstimate.Set(0)
-
-	return nil
+	// logsobj.Builder.Flush is not re-entrant: once it consumes the buffered
+	// state, a retry cannot reproduce the object. Any flushCommitter error
+	// that isn't a graceful shutdown therefore escalates to a panic so the
+	// process restarts and Kafka replays from the last committed offset.
+	panic(err)
 }
 
 func (p *processor) observeRecord(rec *kgo.Record, now time.Time) {

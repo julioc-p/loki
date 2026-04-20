@@ -3,6 +3,7 @@ package consumer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"testing"
 	"testing/synctest"
@@ -141,6 +142,15 @@ func (m *failureFlushCommitter) Flush(_ context.Context, _ []builder, _ string, 
 	return errors.New("mock error")
 }
 
+// canceledFlushCommitter mimics what the real flushCommitter returns on
+// graceful shutdown: a wrapped context.Canceled. The processor is expected to
+// return this error rather than panic.
+type canceledFlushCommitter struct{}
+
+func (m *canceledFlushCommitter) Flush(_ context.Context, _ []builder, _ string, _ int64) error {
+	return fmt.Errorf("failed to flush data object: %w", context.Canceled)
+}
+
 func TestPartitionProcessor_Flush(t *testing.T) {
 	t.Run("should succeed", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
@@ -174,7 +184,12 @@ func TestPartitionProcessor_Flush(t *testing.T) {
 		})
 	})
 
-	t.Run("should fail", func(t *testing.T) {
+	t.Run("should panic on non-cancel flushCommitter error", func(t *testing.T) {
+		// logsobj.Builder.Flush is not re-entrant: once it consumes the
+		// buffered state, a retry cannot reproduce the object. Any
+		// flushCommitter error that isn't a graceful shutdown therefore
+		// escalates to a panic so the process restarts and Kafka replays
+		// from the last committed offset.
 		synctest.Test(t, func(t *testing.T) {
 			var (
 				ctx            = t.Context()
@@ -185,24 +200,39 @@ func TestPartitionProcessor_Flush(t *testing.T) {
 				proc           = newProcessor(group, nil, flushCommitter, 5*time.Minute, 30*time.Minute, log.NewNopLogger(), reg)
 			)
 
-			// Process a record containing some log lines. No flush should occur.
 			rec := newTestRecord(t, "tenant", time.Now())
 			require.NoError(t, proc.processRecord(ctx, rec))
-			require.Equal(t, time.Now(), proc.firstAppend)
-			require.Equal(t, time.Now(), proc.lastAppend)
-			require.Equal(t, rec.Offset, proc.lastOffset)
-			wantFirstAppend := proc.firstAppend
-			wantLastAppend := proc.lastAppend
-			wantLastOffset := proc.lastOffset
 
-			// Advance time and force a flush. This flush should fail.
 			time.Sleep(time.Second)
-			require.EqualError(t, proc.flush(ctx, "forced"), "mock error")
+			require.PanicsWithError(t, "mock error", func() {
+				_ = proc.flush(ctx, "forced")
+			})
+		})
+	})
 
-			// Despite the failure, the following fields should remain
-			require.Equal(t, wantFirstAppend, proc.firstAppend)
-			require.Equal(t, wantLastAppend, proc.lastAppend)
-			require.Equal(t, wantLastOffset, proc.lastOffset)
+	t.Run("should return on context canceled without panic", func(t *testing.T) {
+		// On graceful shutdown the flushCommitter surfaces a wrapped
+		// context.Canceled; the processor returns the error so the caller
+		// can exit cleanly and leave the offset uncommitted for Kafka
+		// replay on restart.
+		synctest.Test(t, func(t *testing.T) {
+			var (
+				ctx            = t.Context()
+				reg            = prometheus.NewRegistry()
+				builder        = newTestBuilder(t, reg)
+				group          = newMockBuilderGroup(builder)
+				flushCommitter = &canceledFlushCommitter{}
+				proc           = newProcessor(group, nil, flushCommitter, 5*time.Minute, 30*time.Minute, log.NewNopLogger(), reg)
+			)
+
+			rec := newTestRecord(t, "tenant", time.Now())
+			require.NoError(t, proc.processRecord(ctx, rec))
+
+			time.Sleep(time.Second)
+			require.NotPanics(t, func() {
+				err := proc.flush(ctx, "forced")
+				require.ErrorIs(t, err, context.Canceled)
+			})
 		})
 	})
 }

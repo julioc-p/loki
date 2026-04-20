@@ -68,6 +68,7 @@ func newFlushCommitter(
 // Flush multiple data object builders and, if successful, commit the offset.
 func (c *flushCommitterImpl) Flush(ctx context.Context, builders []builder, reason string, offset int64) error {
 	for _, b := range builders {
+		earliestRecordTime := b.EarliestRecordTime()
 		objectPath, err := c.flusher.Flush(ctx, b, reason)
 		if err != nil {
 			return fmt.Errorf("failed to flush data object: %w", err)
@@ -76,7 +77,7 @@ func (c *flushCommitterImpl) Flush(ctx context.Context, builders []builder, reas
 		// flush a lot of windows at once this could be batched into a single
 		// Kafka produce; for now the sequential path keeps retries / error
 		// handling simple.
-		if err := c.emitEvent(ctx, objectPath, b.EarliestRecordTime()); err != nil {
+		if err := c.emitEvent(ctx, objectPath, earliestRecordTime); err != nil {
 			return fmt.Errorf("failed to emit metastore event: %w", err)
 		}
 	}

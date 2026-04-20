@@ -1,6 +1,7 @@
 package consumer
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
 
+	"github.com/grafana/loki/v3/pkg/dataobj/metastore"
 	"github.com/grafana/loki/v3/pkg/logproto"
 )
 
@@ -18,7 +20,7 @@ func TestFlushCommitter(t *testing.T) {
 		var (
 			now             = time.Now()
 			reg             = prometheus.NewRegistry()
-			flusher         = &mockFlusher{}
+			flusher         = &flushingMockFlusher{}
 			metastoreKafka  = &mockKafka{}
 			metastoreEvents = newMetastoreEvents(1, 10, metastoreKafka)
 			committer       = &mockCommitter{}
@@ -37,6 +39,9 @@ func TestFlushCommitter(t *testing.T) {
 		// offset was committed.
 		require.Equal(t, 1, flusher.flushes)
 		require.Len(t, metastoreKafka.produced, 1)
+		var event metastore.ObjectWrittenEvent
+		require.NoError(t, event.Unmarshal(metastoreKafka.produced[0].Value))
+		require.Equal(t, now.Format(time.RFC3339), event.EarliestRecordTime)
 		require.Len(t, committer.offsets, 1)
 		require.Equal(t, int64(1), committer.offsets[0])
 		// Check that the metrics are correct.
@@ -84,4 +89,20 @@ func TestFlushCommitter(t *testing.T) {
 	loki_dataobj_consumer_commit_failures_total 0
 	`), "loki_dataobj_consumer_commits_total", "loki_dataobj_consumer_commit_failures_total"))
 	})
+}
+
+type flushingMockFlusher struct {
+	flushes int
+}
+
+func (m *flushingMockFlusher) Flush(_ context.Context, b builder, _ string) (string, error) {
+	m.flushes++
+	_, closer, err := b.Flush()
+	if err != nil {
+		return "", err
+	}
+	if closer != nil {
+		_ = closer.Close()
+	}
+	return "", nil
 }

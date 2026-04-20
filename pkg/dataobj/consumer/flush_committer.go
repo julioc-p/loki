@@ -83,7 +83,7 @@ func (c *flushCommitterImpl) Flush(ctx context.Context, builders []builder, reas
 
 	if err := c.commit(ctx, offset); err != nil {
 		c.commitFailures.Inc()
-		return fmt.Errorf("failed to commit data object: %w", err)
+		return fmt.Errorf("failed to commit data object offset %d: %w", offset, err)
 	}
 	return nil
 }

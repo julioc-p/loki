@@ -114,11 +114,30 @@ func TestTOCAlignedBuilderGroup_FactoryFailurePropagates(t *testing.T) {
 			windowEntry(w2, time.Minute, "fails"),
 		},
 	}, w1)
-	// Exactly one of the two windows will be able to grab a builder; the
-	// other one will hit the factory error. Map iteration order decides
-	// which one it is but the error must bubble up either way.
 	require.Error(t, err)
 	require.ErrorContains(t, err, "boom")
+	require.Len(t, g.GetBuilders(), 1)
+	require.Equal(t, 1, factory.created)
+
+	ranges := g.GetBuilders()[0].TimeRanges()
+	require.Len(t, ranges, 1)
+	require.Equal(t, w1, ranges[0].MinTime.UTC().Truncate(metastore.TOCWindowSize))
+}
+
+func TestTOCAlignedBuilderGroup_DoesNotKeepEmptyBuilderWhenAppendFails(t *testing.T) {
+	factory := newCountingFactory(t)
+	g := NewTOCAlignedBuilderGroup(factory, math.MaxInt)
+
+	w1 := time.Date(2026, time.April, 17, 0, 0, 0, 0, time.UTC)
+	err := g.Append("tenant", logproto.Stream{
+		Labels: `{app="foo"`,
+		Entries: []push.Entry{
+			windowEntry(w1, time.Minute, "bad-labels"),
+		},
+	}, w1)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "failed to parse labels")
+	require.Empty(t, g.GetBuilders())
 }
 
 func TestTOCAlignedBuilderGroup_IsFullBoundsTotalMemory(t *testing.T) {

@@ -59,15 +59,34 @@ func (g *TOCAlignedBuilderGroup) Append(tenant string, stream logproto.Stream, r
 		streamsByTimeWindows[w] = windowedStream
 	}
 
-	for w, stream := range streamsByTimeWindows {
-		if _, ok := g.builders[w]; !ok {
-			b, err := g.builderFactory.NewBuilder()
+	windows := make([]time.Time, 0, len(streamsByTimeWindows))
+	for w := range streamsByTimeWindows {
+		windows = append(windows, w)
+	}
+	sort.Slice(windows, func(i, j int) bool { return windows[i].Before(windows[j]) })
+
+	for _, w := range windows {
+		windowedStream := streamsByTimeWindows[w]
+
+		b, ok := g.builders[w]
+		if !ok {
+			var err error
+			b, err = g.builderFactory.NewBuilder()
 			if err != nil {
 				return fmt.Errorf("error creating logsobj builder for window %s: %w", w.Format(time.RFC3339), err)
 			}
+
+			// Keep newly created builders out of the group map until we know
+			// append succeeded, so failed appends cannot leave empty builders
+			// behind to be flushed later.
+			if err := b.Append(tenant, windowedStream, recTime); err != nil {
+				return fmt.Errorf("append for window %s: %w", w.Format(time.RFC3339), err)
+			}
+
 			g.builders[w] = b
+			continue
 		}
-		if err := g.builders[w].Append(tenant, stream, recTime); err != nil {
+		if err := b.Append(tenant, windowedStream, recTime); err != nil {
 			return fmt.Errorf("append for window %s: %w", w.Format(time.RFC3339), err)
 		}
 	}

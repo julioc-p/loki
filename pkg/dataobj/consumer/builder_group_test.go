@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/loki/pkg/push"
-	
+
 	"github.com/grafana/loki/v3/pkg/dataobj/consumer/logsobj"
 	"github.com/grafana/loki/v3/pkg/dataobj/metastore"
 	"github.com/grafana/loki/v3/pkg/logproto"
@@ -174,6 +174,37 @@ func TestTOCAlignedBuilderGroup_ResetClearsState(t *testing.T) {
 	require.Empty(t, g.GetBuilders())
 	require.Equal(t, 0, g.GetEstimatedSize())
 	require.False(t, g.IsFull())
+}
+
+func TestTOCAlignedBuilderGroup_GetBuildersDropsFlushedBuilders(t *testing.T) {
+	factory := newCountingFactory(t)
+	g := NewTOCAlignedBuilderGroup(factory, math.MaxInt)
+
+	w1 := time.Date(2026, time.April, 17, 0, 0, 0, 0, time.UTC)
+	w2 := w1.Add(metastore.TOCWindowSize)
+	require.NoError(t, g.Append("tenant", logproto.Stream{
+		Labels: `{app="foo"}`,
+		Entries: []push.Entry{
+			windowEntry(w1, time.Minute, "a"),
+			windowEntry(w2, time.Minute, "b"),
+		},
+	}, w1))
+
+	builders := g.GetBuilders()
+	require.Len(t, builders, 2)
+
+	_, closer, err := builders[0].Flush()
+	require.NoError(t, err)
+	require.NoError(t, closer.Close())
+
+	builders = g.GetBuilders()
+	require.Len(t, builders, 1, "flushed builders should be dropped from retries")
+
+	_, closer, err = builders[0].Flush()
+	require.NoError(t, err)
+	require.NoError(t, closer.Close())
+
+	require.Empty(t, g.GetBuilders())
 }
 
 func TestTOCAlignedBuilderGroup_GetBuildersReturnsSnapshot(t *testing.T) {

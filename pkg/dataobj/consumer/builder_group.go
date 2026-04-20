@@ -114,7 +114,15 @@ func (g *TOCAlignedBuilderGroup) GetBuilders() []builder {
 
 	result := make([]builder, 0, len(g.builders))
 	for _, w := range windows {
-		result = append(result, g.builders[w])
+		b := g.builders[w]
+		if len(b.TimeRanges()) == 0 {
+			// Builders may already be flushed/reset after a partial flush failure.
+			// Dropping empty builders here lets retries continue with the
+			// remaining non-empty windows.
+			delete(g.builders, w)
+			continue
+		}
+		result = append(result, b)
 	}
 	return result
 }

@@ -343,38 +343,6 @@ func (b *Builder) parseLabels(labelString string) (labels.Labels, error) {
 	return parsed, nil
 }
 
-// labelsEstimate estimates the size of a set of labels in bytes.
-func labelsEstimate(ls labels.Labels) int {
-	var (
-		keysSize   int
-		valuesSize int
-	)
-
-	ls.Range(func(l labels.Label) {
-		keysSize += len(l.Name)
-		valuesSize += len(l.Value)
-	})
-
-	// Keys are stored as columns directly, while values get compressed. We'll
-	// underestimate a 2x compression ratio.
-	return keysSize + valuesSize/2
-}
-
-// streamSizeEstimate estimates the size of a stream in bytes.
-func streamSizeEstimate(stream logproto.Stream) int {
-	var size int
-	for _, entry := range stream.Entries {
-		// We only check the size of the line and metadata. Timestamps and IDs
-		// encode so well that they're unlikely to make a significant impact on our
-		// size estimate.
-		size += len(entry.Line) / 2 // Line with 2x compression ratio
-		for _, md := range entry.StructuredMetadata {
-			size += len(md.Name) + len(md.Value)/2
-		}
-	}
-	return size
-}
-
 func convertMetadata(md push.LabelsAdapter) labels.Labels {
 	l := labels.NewScratchBuilder(len(md))
 

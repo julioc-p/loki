@@ -1,6 +1,8 @@
 module github.com/grafana/loki/operator
 
-go 1.25.0
+go 1.24.0
+
+toolchain go1.24.4
 
 require (
 	dario.cat/mergo v1.0.2
@@ -176,4 +178,3 @@ replace github.com/grafana/loki/operator/api/loki => ./api/loki
 // Replace v2.4.0+incompatible indirect refs with v5.1.1 for compatibility with google.golang.org/grpc >=v1.56.3
 replace github.com/sercand/kuberesolver => github.com/sercand/kuberesolver/v5 v5.1.1
 
-replace github.com/grafana/loki/pkg/push => ../pkg/push

@@ -257,7 +257,7 @@ func TestStatsExtractor_CheckForNewEngineWarning(t *testing.T) {
 		{
 			name: "case sensitive check",
 			warnings: []string{
-				"Query was executed using the next-generation Loki query engine.",
+				"query was executed using the next-generation Loki query engine.",
 			},
 			expected: false, // Should be case sensitive
 		},

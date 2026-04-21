@@ -207,5 +207,3 @@ require (
 )
 
 replace github.com/grafana/loki/operator/api/loki => ./api/loki
-
-replace github.com/grafana/loki/pkg/push => ../pkg/push

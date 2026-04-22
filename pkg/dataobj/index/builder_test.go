@@ -305,7 +305,10 @@ func TestIndexBuilder_idlePartition(t *testing.T) {
 	}
 
 	require.Equal(t, 30, len(readAllSectionPointers(t, bucket)))
-	require.Equal(t, 0, len(p.partitionStates[0].events)) // Events should be gone now they've been processed
+	p.partitionsMutex.Lock()
+	numEvents := len(p.partitionStates[0].events)
+	p.partitionsMutex.Unlock()
+	require.Equal(t, 0, numEvents) // Events should be gone now they've been processed
 }
 
 func TestIndexBuilder_oldEvents(t *testing.T) {
@@ -378,7 +381,10 @@ func TestIndexBuilder_oldEvents(t *testing.T) {
 	}
 
 	require.Equal(t, 30, len(readAllSectionPointers(t, bucket)))
-	require.Equal(t, 0, len(p.partitionStates[0].events)) // Events should be gone now they've been processed
+	p.partitionsMutex.Lock()
+	numEvents := len(p.partitionStates[0].events)
+	p.partitionsMutex.Unlock()
+	require.Equal(t, 0, numEvents) // Events should be gone now they've been processed
 }
 
 func readAllSectionPointers(t *testing.T, bucket objstore.Bucket) []pointers.SectionPointer {

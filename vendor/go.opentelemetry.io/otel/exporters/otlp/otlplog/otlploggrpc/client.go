@@ -154,7 +154,7 @@ func (c *client) UploadLogs(ctx context.Context, rl []*logpb.ResourceLogs) (uplo
 		}()
 	}
 
-	return errors.Join(uploadErr, c.requestFunc(ctx, func(ctx context.Context) error {
+	reqErr := c.requestFunc(ctx, func(ctx context.Context) error {
 		resp, err := c.lsc.Export(ctx, &collogpb.ExportLogsServiceRequest{
 			ResourceLogs: rl,
 		})
@@ -172,7 +172,9 @@ func (c *client) UploadLogs(ctx context.Context, rl []*logpb.ResourceLogs) (uplo
 			return nil
 		}
 		return err
-	}))
+	})
+
+	return errors.Join(uploadErr, reqErr)
 }
 
 // Shutdown shuts down the client, freeing all resources.

@@ -33,7 +33,6 @@ func NewValidator(l Limits, t push.UsageTracker) (*Validator, error) {
 }
 
 type validationContext struct {
-	rejectOldSample       bool
 	rejectOldSampleMaxAge int64
 	creationGracePeriod   int64
 
@@ -66,7 +65,6 @@ type validationContext struct {
 func (v Validator) getValidationContextForTime(now time.Time, userID string) validationContext {
 	return validationContext{
 		userID:                        userID,
-		rejectOldSample:               v.RejectOldSamples(userID),
 		rejectOldSampleMaxAge:         now.Add(-v.RejectOldSamplesMaxAge(userID)).UnixNano(),
 		creationGracePeriod:           now.Add(v.CreationGracePeriod(userID)).UnixNano(),
 		maxLineSize:                   v.MaxLineSize(userID),

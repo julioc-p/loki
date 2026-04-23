@@ -19,6 +19,10 @@ func (r *scanTimeRangePushup) apply(root Node) bool {
 		}
 		return false
 	})
+	if len(nodes) > 1 {
+		// Can't safely push up ranges across multiple scans that may carry different bounds.
+		return false
+	}
 
 	// propagate time range to target parent nodes.
 	changed := false

@@ -154,4 +154,46 @@ func TestScanTimeRangePushup(t *testing.T) {
 		expected := PrintAsTree(expectedPlan)
 		require.Equal(t, expected, actual)
 	})
+	t.Run("does not push up ranges with multiple scans", func(t *testing.T) {
+		plan := &Plan{}
+		{
+			dataObjScanA := plan.graph.Add(&DataObjScan{MaxTimeRange: TimeRange{Start: time.Date(2026, 3, 14, 16, 44, 29, 0, time.UTC),
+				End: time.Date(2026, 3, 14, 16, 46, 31, 0, time.UTC)}})
+			dataObjScanB := plan.graph.Add(&DataObjScan{MaxTimeRange: TimeRange{Start: time.Date(2026, 3, 14, 16, 45, 29, 0, time.UTC),
+				End: time.Date(2026, 3, 14, 16, 47, 31, 0, time.UTC)}})
+			rangeAgg := plan.graph.Add(&RangeAggregation{
+				Start: time.Date(2026, 3, 14, 16, 40, 0, 0, time.UTC),
+				End:   time.Date(2026, 3, 14, 17, 10, 0, 0, time.UTC),
+				Step:  time.Minute, Range: time.Minute})
+			_ = plan.graph.AddEdge(dag.Edge[Node]{Parent: rangeAgg, Child: dataObjScanA})
+			_ = plan.graph.AddEdge(dag.Edge[Node]{Parent: rangeAgg, Child: dataObjScanB})
+		}
+
+		// apply optimisations
+		optimizations := []*Optimization{
+			newOptimization("scan time range pushup", plan).withRules(
+				&scanTimeRangePushup{plan: plan},
+			),
+		}
+		o := NewOptimizer(plan, optimizations)
+		o.Optimize(plan.Roots()[0])
+
+		expectedPlan := &Plan{}
+		{
+			dataObjScanA := expectedPlan.graph.Add(&DataObjScan{MaxTimeRange: TimeRange{Start: time.Date(2026, 3, 14, 16, 44, 29, 0, time.UTC),
+				End: time.Date(2026, 3, 14, 16, 46, 31, 0, time.UTC)}})
+			dataObjScanB := expectedPlan.graph.Add(&DataObjScan{MaxTimeRange: TimeRange{Start: time.Date(2026, 3, 14, 16, 45, 29, 0, time.UTC),
+				End: time.Date(2026, 3, 14, 16, 47, 31, 0, time.UTC)}})
+			rangeAgg := expectedPlan.graph.Add(&RangeAggregation{
+				Start: time.Date(2026, 3, 14, 16, 40, 0, 0, time.UTC),
+				End:   time.Date(2026, 3, 14, 17, 10, 0, 0, time.UTC),
+				Step:  time.Minute, Range: time.Minute})
+			_ = expectedPlan.graph.AddEdge(dag.Edge[Node]{Parent: rangeAgg, Child: dataObjScanA})
+			_ = expectedPlan.graph.AddEdge(dag.Edge[Node]{Parent: rangeAgg, Child: dataObjScanB})
+		}
+
+		actual := PrintAsTree(plan)
+		expected := PrintAsTree(expectedPlan)
+		require.Equal(t, expected, actual)
+	})
 }

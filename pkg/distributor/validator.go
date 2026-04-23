@@ -89,14 +89,14 @@ func (v Validator) getValidationContextForTime(now time.Time, userID string) val
 }
 
 // ValidateEntry returns an error if the entry is invalid and report metrics for invalid entries accordingly.
-func (v Validator) ValidateEntry(ctx context.Context, vCtx validationContext, labels labels.Labels, entry logproto.Entry, retentionHours string, policy, format string) error {
+func (v Validator) ValidateEntry(ctx context.Context, vCtx validationContext, labels labels.Labels, entry logproto.Entry, rejectOldSamples bool, retentionHours string, policy, format string) error {
 	ts := entry.Timestamp.UnixNano()
 	validation.LineLengthHist.Observe(float64(len(entry.Line)))
 	structuredMetadataCount := len(entry.StructuredMetadata)
 	structuredMetadataSizeBytes := util.StructuredMetadataSize(entry.StructuredMetadata)
 	entrySize := float64(len(entry.Line) + structuredMetadataSizeBytes)
 
-	if v.PolicyRejectOldSamples(vCtx.userID, policy) && ts < vCtx.rejectOldSampleMaxAge {
+	if rejectOldSamples && ts < vCtx.rejectOldSampleMaxAge {
 		// Makes time string on the error message formatted consistently.
 		formatedEntryTime := entry.Timestamp.Format(timeFormat)
 		formatedRejectMaxAgeTime := time.Unix(0, vCtx.rejectOldSampleMaxAge).Format(timeFormat)

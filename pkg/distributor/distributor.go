@@ -682,13 +682,15 @@ func (d *Distributor) PushWithResolver(ctx context.Context, req *logproto.PushRe
 				continue
 			}
 
+			rejectOldSamples := d.validator.PolicyRejectOldSamples(validationContext.userID, policy)
+
 			n := 0
 			prevTs := stream.Entries[0].Timestamp
 			streamEntriesSize := 0
 
 			labelNamer := otlptranslator.LabelNamer{}
 			for _, entry := range stream.Entries {
-				if err := d.validator.ValidateEntry(ctx, validationContext, lbs, entry, retentionHours, policy, format); err != nil {
+				if err := d.validator.ValidateEntry(ctx, validationContext, lbs, entry, rejectOldSamples, retentionHours, policy, format); err != nil {
 					d.writeFailuresManager.Log(tenantID, err)
 					validationErrors.Add(err)
 					continue

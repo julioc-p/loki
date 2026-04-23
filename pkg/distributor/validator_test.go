@@ -133,7 +133,8 @@ func TestValidator_ValidateEntry(t *testing.T) {
 			assert.NoError(t, err)
 			retentionHours := util.RetentionHours(v.RetentionPeriod(tt.userID))
 
-			err = v.ValidateEntry(ctx, v.getValidationContextForTime(testTime, tt.userID), testStreamLabels, tt.entry, retentionHours, "", "loki")
+			rejectOldSamples := v.PolicyRejectOldSamples(tt.userID, "")
+			err = v.ValidateEntry(ctx, v.getValidationContextForTime(testTime, tt.userID), testStreamLabels, tt.entry, rejectOldSamples, retentionHours, "", "loki")
 			assert.Equal(t, tt.expected, err)
 		})
 	}

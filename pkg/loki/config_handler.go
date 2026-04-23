@@ -24,7 +24,35 @@ func yamlMarshalUnmarshal(in interface{}) (map[interface{}]interface{}, error) {
 		return nil, err
 	}
 
-	return object, nil
+	return normalizeYAMLMap(object), nil
+}
+
+func normalizeYAMLMap(in map[interface{}]interface{}) map[interface{}]interface{} {
+	out := make(map[interface{}]interface{}, len(in))
+	for k, v := range in {
+		out[k] = normalizeYAMLValue(v)
+	}
+	return out
+}
+
+func normalizeYAMLValue(in interface{}) interface{} {
+	switch v := in.(type) {
+	case map[interface{}]interface{}:
+		return normalizeYAMLMap(v)
+	case map[string]interface{}:
+		out := make(map[interface{}]interface{}, len(v))
+		for k, inner := range v {
+			out[k] = normalizeYAMLValue(inner)
+		}
+		return out
+	case []interface{}:
+		for i, inner := range v {
+			v[i] = normalizeYAMLValue(inner)
+		}
+		return v
+	default:
+		return in
+	}
 }
 
 func diffConfig(defaultConfig, actualConfig map[interface{}]interface{}) (map[interface{}]interface{}, error) {

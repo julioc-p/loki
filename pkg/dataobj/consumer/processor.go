@@ -248,7 +248,7 @@ func (p *processor) flush(ctx context.Context, reason string) error {
 	if err == nil {
 		return nil
 	}
-	if errors.Is(err, context.Canceled) {
+	if errors.Is(err, context.Canceled) || ctx.Err() != nil {
 		return err
 	}
 	// logsobj.Builder.Flush is not re-entrant: once it consumes the buffered

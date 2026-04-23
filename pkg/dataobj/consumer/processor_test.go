@@ -151,6 +151,14 @@ func (m *canceledFlushCommitter) Flush(_ context.Context, _ []builder, _ string,
 	return fmt.Errorf("failed to flush data object: %w", context.Canceled)
 }
 
+type contextCanceledWithTransientFlushCommitter struct {
+	err error
+}
+
+func (m *contextCanceledWithTransientFlushCommitter) Flush(_ context.Context, _ []builder, _ string, _ int64) error {
+	return m.err
+}
+
 func TestPartitionProcessor_Flush(t *testing.T) {
 	t.Run("should succeed", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
@@ -232,6 +240,33 @@ func TestPartitionProcessor_Flush(t *testing.T) {
 			require.NotPanics(t, func() {
 				err := proc.flush(ctx, "forced")
 				require.ErrorIs(t, err, context.Canceled)
+			})
+		})
+	})
+
+	t.Run("should return on canceled context even with non-cancel flushCommitter error", func(t *testing.T) {
+		// During shutdown, retries in flushCommitter can stop because context
+		// is canceled but still return the last transient error from the retry
+		// loop; this should not trigger a panic.
+		synctest.Test(t, func(t *testing.T) {
+			var (
+				reg            = prometheus.NewRegistry()
+				builder        = newTestBuilder(t, reg)
+				group          = newMockBuilderGroup(builder)
+				transientErr   = errors.New("transient error")
+				flushCommitter = &contextCanceledWithTransientFlushCommitter{err: transientErr}
+				proc           = newProcessor(group, nil, flushCommitter, 5*time.Minute, 30*time.Minute, log.NewNopLogger(), reg)
+			)
+			ctx, cancel := context.WithCancel(t.Context())
+			cancel()
+
+			rec := newTestRecord(t, "tenant", time.Now())
+			require.NoError(t, proc.processRecord(t.Context(), rec))
+
+			time.Sleep(time.Second)
+			require.NotPanics(t, func() {
+				err := proc.flush(ctx, "forced")
+				require.ErrorIs(t, err, transientErr)
 			})
 		})
 	})

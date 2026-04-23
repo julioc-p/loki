@@ -16,9 +16,17 @@ func TestBuilderFactory(t *testing.T) {
 	require.NoError(t, metrics.Register(reg))
 	bf, err := NewBuilderFactory(testBuilderConfig, scratch.NewMemory(), metrics)
 	require.NoError(t, err)
-	b, err := bf.NewBuilder()
+
+	// can create builder without metrics
+	b, err := bf.NewSorterBuilder()
 	require.NoError(t, err)
 	require.NotNil(t, b)
+
+	// can create builder with metrics
+	b, err = bf.NewBuilder()
+	require.NoError(t, err)
+	require.NotNil(t, b)
+
 	// Should be able to gather registered metrics.
 	n, err := testutil.GatherAndCount(reg)
 	require.NoError(t, err)

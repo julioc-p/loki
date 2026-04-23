@@ -32,3 +32,9 @@ func NewBuilderFactory(cfg BuilderConfig, scratchStore scratch.Store, metrics *B
 func (f *BuilderFactory) NewBuilder() (*Builder, error) {
 	return NewBuilder(f.cfg, f.scratchStore, f.metrics)
 }
+
+// NewSorterBuilder returns a new builder with "fake" non-registered metrics.
+// TODO(ivkalita): This is temporary to prevent "sorting" builder metrics from messing up the real builder metrics.
+func (f *BuilderFactory) NewSorterBuilder() (*Builder, error) {
+	return NewBuilder(f.cfg, f.scratchStore, NewBuilderMetrics())
+}

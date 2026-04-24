@@ -1168,8 +1168,8 @@ func (cl *Client) updateBrokers(brokers []kmsg.MetadataResponseBroker) {
 // brokerRacks returns a map of broker node ID to rack for all known brokers
 // that have a rack configured.
 func (cl *Client) brokerRacks() map[int32]string {
-	cl.brokersMu.Lock()
-	defer cl.brokersMu.Unlock()
+	cl.brokersMu.RLock()
+	defer cl.brokersMu.RUnlock()
 	racks := make(map[int32]string, len(cl.brokers))
 	for _, b := range cl.brokers {
 		if b.meta.Rack != nil {

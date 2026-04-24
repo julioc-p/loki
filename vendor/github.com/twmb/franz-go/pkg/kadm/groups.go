@@ -2738,8 +2738,19 @@ func (cl *Client) FetchOffsetsByID(ctx context.Context, group string) (OffsetRes
 
 	// v0-v7 fallback: resp.Topics only. Convert to group format
 	// for the shared buildPartitions helper.
+	// Resolve topic names to IDs to avoid collapsing all responses
+	// under a zero TopicID key.
+	topics := make(Offsets, len(resp.Topics))
+	for _, t := range resp.Topics {
+		topics[t.Topic] = nil
+	}
+	name2id := cl.resolveTopicIDs(ctx, topics)
 	rs := make(OffsetResponsesByID)
 	for _, t := range resp.Topics {
+		id := name2id[t.Topic]
+		if id == (TopicID{}) {
+			return nil, fmt.Errorf("unable to resolve topic ID for topic %q in offset fetch response", t.Topic)
+		}
 		gp := make([]kmsg.OffsetFetchResponseGroupTopicPartition, len(t.Partitions))
 		for i, p := range t.Partitions {
 			gp[i] = kmsg.OffsetFetchResponseGroupTopicPartition{
@@ -2750,12 +2761,11 @@ func (cl *Client) FetchOffsetsByID(ctx context.Context, group string) (OffsetRes
 				ErrorCode:   p.ErrorCode,
 			}
 		}
-		// v0-v7 has no TopicID; use zero value.
-		rt, err := buildPartitions(t.Topic, TopicID{}, gp)
+		rt, err := buildPartitions(t.Topic, id, gp)
 		if err != nil {
 			return nil, err
 		}
-		rs[TopicID{}] = rt
+		rs[id] = rt
 	}
 	return rs, nil
 }

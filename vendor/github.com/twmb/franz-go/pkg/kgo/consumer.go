@@ -863,7 +863,7 @@ func (cl *Client) AddConsumeTopics(topics ...string) {
 // GetConsumeTopics retrieves a list of current topics being consumed.
 func (cl *Client) GetConsumeTopics() []string {
 	c := &cl.consumer
-	if c.g == nil && c.d == nil {
+	if c.g == nil && c.d == nil && c.s == nil {
 		return nil
 	}
 	var m map[string]*topicPartitions

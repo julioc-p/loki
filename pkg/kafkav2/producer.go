@@ -50,9 +50,7 @@ func (p *NoCancelProducer) Produce(ctx context.Context, r *kgo.Record, promise f
 		promiseOnce := atomic.Int64{}
 		producePromise = func(r *kgo.Record, err error) {
 			if promiseOnce.CompareAndSwap(0, 1) {
-				if promise != nil {
-					promise(r, err)
-				}
+				promise(r, err)
 				close(done)
 			}
 		}

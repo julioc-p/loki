@@ -38,6 +38,9 @@ func NewNoCancelProducer(client Producer) *NoCancelProducer {
 // However, unlike [kgo], a canceled context will not cancel all other buffered
 // records for the same partition.
 func (p *NoCancelProducer) Produce(ctx context.Context, r *kgo.Record, promise func(*kgo.Record, error)) {
+	if promise == nil {
+		promise = func(*kgo.Record, error) {}
+	}
 	// done is closed when the promise has been called.
 	done := make(chan struct{})
 	// promiseOnce calls promise if it has not been called before, and then closes
@@ -65,6 +68,9 @@ func (p *NoCancelProducer) Produce(ctx context.Context, r *kgo.Record, promise f
 
 // ProduceSync is the synchronous version of Produce.
 func (p *NoCancelProducer) ProduceSync(ctx context.Context, rs ...*kgo.Record) kgo.ProduceResults {
+	if len(rs) == 0 {
+		return kgo.ProduceResults{}
+	}
 	noCancelCtx := context.WithoutCancel(ctx)
 	// done is closed when resultsCh is closed.
 	done := make(chan struct{})

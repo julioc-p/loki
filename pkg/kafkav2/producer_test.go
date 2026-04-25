@@ -44,6 +44,16 @@ func TestNoCancelProducer_Produce(t *testing.T) {
 	args, ok = recorded.calls[1].([]any)
 	require.True(t, ok)
 	require.Equal(t, rec2, args[2])
+
+	// Nil promises are optional and should not panic.
+	rec3 := &kgo.Record{Topic: "test", Partition: 0, Key: []byte("key3"), Value: []byte("value3")}
+	require.NotPanics(t, func() {
+		producer.Produce(testCtx, rec3, nil)
+	})
+	require.Len(t, recorded.calls, 3)
+	args, ok = recorded.calls[2].([]any)
+	require.True(t, ok)
+	require.Equal(t, rec3, args[2])
 }
 
 func TestNoCancelProducer_ProduceSync(t *testing.T) {
@@ -81,4 +91,9 @@ func TestNoCancelProducer_ProduceSync(t *testing.T) {
 	args, ok = recorded.calls[1].([]any)
 	require.True(t, ok)
 	require.Equal(t, rec2, args[2])
+
+	// No records should return immediately with empty results.
+	results = producer.ProduceSync(testCtx)
+	require.Empty(t, results)
+	require.Len(t, recorded.calls, 2)
 }

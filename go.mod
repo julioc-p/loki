@@ -143,9 +143,9 @@ require (
 	go.yaml.in/yaml/v3 v3.0.4
 	go4.org/netipx v0.0.0-20230125063823-8449b0a6169f
 	golang.org/x/text v0.36.0
-	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
+	google.golang.org/protobuf v1.36.11
 	gotest.tools v2.2.0+incompatible
-	k8s.io/apimachinery v0.36.0
+	k8s.io/apimachinery v0.35.4
 	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2
 	zombiezen.com/go/sqlite v1.4.2
 )
@@ -440,7 +440,7 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20260401024825-9d38bb4040a9 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260406210006-6f92a3bedf2d
 	gopkg.in/inf.v0 v0.9.1 // indirect
-	k8s.io/client-go v0.35.3 // indirect
+	k8s.io/client-go v0.35.4 // indirect
 	k8s.io/kube-openapi v0.0.0-20260317180543-43fb72c5454a // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect

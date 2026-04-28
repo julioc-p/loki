@@ -824,7 +824,7 @@ func (os OffsetResponses) Ok() bool {
 // failures are included in the responses.
 func (cl *Client) CommitOffsets(ctx context.Context, group string, os Offsets) (OffsetResponses, error) {
 	// Resolve topic names to IDs via metadata for v10+ support.
-	t2id := cl.resolveTopicIDs(ctx, os)
+	t2id, resolvedIDs := cl.resolveTopicIDs(ctx, os)
 
 	rs := make(OffsetResponses)
 
@@ -832,7 +832,7 @@ func (cl *Client) CommitOffsets(ctx context.Context, group string, os Offsets) (
 	req.Group = group
 	for t, ps := range os {
 		id, ok := t2id[t]
-		if !ok {
+		if !ok && resolvedIDs {
 			// Cannot resolve topic name to ID -- inject error
 			// for all partitions and skip in the request.
 			rt := make(map[int32]OffsetResponse)
@@ -2524,18 +2524,18 @@ func (cl *Client) DescribeShareGroups(ctx context.Context, groups ...string) (De
 
 // resolveTopicIDs issues a metadata request for the topics in the given
 // Offsets map and returns a name-to-TopicID mapping.
-func (cl *Client) resolveTopicIDs(ctx context.Context, os Offsets) map[string]TopicID {
+func (cl *Client) resolveTopicIDs(ctx context.Context, os Offsets) (map[string]TopicID, bool) {
 	topics := make([]string, 0, len(os))
 	for t := range os {
 		topics = append(topics, t)
 	}
 	t2id := make(map[string]TopicID, len(topics))
 	if len(topics) == 0 {
-		return t2id
+		return t2id, true
 	}
 	meta, err := cl.Metadata(ctx, topics...)
 	if err != nil {
-		return t2id
+		return t2id, false
 	}
 	for _, td := range meta.Topics {
 		if td.Err != nil {
@@ -2543,7 +2543,7 @@ func (cl *Client) resolveTopicIDs(ctx context.Context, os Offsets) map[string]To
 		}
 		t2id[td.Topic] = td.ID
 	}
-	return t2id
+	return t2id, true
 }
 
 // resolveTopicNames issues a metadata request for all topics and returns

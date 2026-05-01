@@ -125,6 +125,11 @@ func (s *Script) ensureHash(ctx context.Context, c Scripter) error {
 	return nil
 }
 
+func (s *Script) reloadHash(ctx context.Context, c Scripter) error {
+	cmd := s.Load(ctx, c)
+	return cmd.Err()
+}
+
 func (s *Script) EvalSha(ctx context.Context, c Scripter, keys []string, args ...interface{}) *Cmd {
 	// Default behavior: use client-side SHA-1 computed in NewScript.
 	if !s.serverSHA {
@@ -146,7 +151,7 @@ func (s *Script) EvalSha(ctx context.Context, c Scripter, keys []string, args ..
 	r := c.EvalSha(ctx, hash, keys, args...)
 	if HasErrorPrefix(r.Err(), "NOSCRIPT") {
 		// Script cache was flushed; reload and retry once.
-		if err := s.ensureHash(ctx, c); err != nil {
+		if err := s.reloadHash(ctx, c); err != nil {
 			return s.Eval(ctx, c, keys, args...)
 		}
 		s.mu.RLock()
@@ -176,7 +181,7 @@ func (s *Script) EvalShaRO(ctx context.Context, c Scripter, keys []string, args 
 
 	r := c.EvalShaRO(ctx, hash, keys, args...)
 	if HasErrorPrefix(r.Err(), "NOSCRIPT") {
-		if err := s.ensureHash(ctx, c); err != nil {
+		if err := s.reloadHash(ctx, c); err != nil {
 			return s.EvalRO(ctx, c, keys, args...)
 		}
 		s.mu.RLock()

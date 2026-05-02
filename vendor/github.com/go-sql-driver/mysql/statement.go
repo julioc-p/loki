@@ -72,13 +72,18 @@ func (stmt *mysqlStmt) Exec(args []driver.Value) (driver.Result, error) {
 
 	if resLen > 0 {
 		// Columns
-		if metadataFollows && stmt.mc.extCapabilities&clientCacheMetadata != 0 {
-			// we can not skip column metadata because next stmt.Query() may use it.
-			if stmt.columns, err = mc.readColumns(resLen, stmt.columns); err != nil {
+		if metadataFollows {
+			if stmt.mc.extCapabilities&clientCacheMetadata != 0 {
+				// we can not skip column metadata because next stmt.Query() may use it.
+				stmt.columns, err = mc.readColumns(resLen, stmt.columns)
+			} else {
+				err = mc.skipColumns(resLen)
+			}
+			if err != nil {
 				return nil, err
 			}
 		} else {
-			if err = mc.skipColumns(resLen); err != nil {
+			if err = mc.skipEof(); err != nil {
 				return nil, err
 			}
 		}

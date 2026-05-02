@@ -1244,14 +1244,20 @@ func (stmt *mysqlStmt) writeExecutePacket(args []driver.Value) error {
 // mc.affectedRows and mc.insertIds.
 func (mc *okHandler) discardResults() error {
 	for mc.status&statusMoreResultsExists != 0 {
-		resLen, _, err := mc.readResultSetHeaderPacket()
+		resLen, metadataFollows, err := mc.readResultSetHeaderPacket()
 		if err != nil {
 			return err
 		}
 		if resLen > 0 {
 			// columns
-			if err := mc.conn().skipColumns(resLen); err != nil {
-				return err
+			if metadataFollows {
+				if err := mc.conn().skipColumns(resLen); err != nil {
+					return err
+				}
+			} else {
+				if err := mc.conn().skipEof(); err != nil {
+					return err
+				}
 			}
 			// rows
 			if err := mc.conn().skipRows(); err != nil {

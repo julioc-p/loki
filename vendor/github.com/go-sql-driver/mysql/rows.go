@@ -16,9 +16,10 @@ import (
 )
 
 type resultSet struct {
-	columns     []mysqlField
-	columnNames []string
-	done        bool
+	columns         []mysqlField
+	columnNames     []string
+	done            bool
+	metadataFollows bool
 }
 
 type mysqlRows struct {
@@ -156,12 +157,13 @@ func (rows *mysqlRows) nextResultSet() (int, error) {
 	rows.rs = resultSet{}
 	// rows.mc.affectedRows and rows.mc.insertIds accumulate on each call to
 	// nextResultSet.
-	resLen, _, err := rows.mc.resultUnchanged().readResultSetHeaderPacket()
+	resLen, metadataFollows, err := rows.mc.resultUnchanged().readResultSetHeaderPacket()
 	if err != nil {
 		// Clean up about multi-results flag
 		rows.rs.done = true
 		rows.mc.status = rows.mc.status & (^statusMoreResultsExists)
 	}
+	rows.rs.metadataFollows = metadataFollows
 	return resLen, err
 }
 
@@ -181,12 +183,18 @@ func (rows *mysqlRows) nextNotEmptyResultSet() (int, error) {
 }
 
 func (rows *binaryRows) NextResultSet() error {
+	columns := rows.rs.columns
 	resLen, err := rows.nextNotEmptyResultSet()
 	if err != nil {
 		return err
 	}
 
-	rows.rs.columns, err = rows.mc.readColumns(resLen, nil)
+	if rows.rs.metadataFollows {
+		rows.rs.columns, err = rows.mc.readColumns(resLen, nil)
+	} else {
+		rows.rs.columns = columns
+		err = rows.mc.skipEof()
+	}
 	return err
 }
 

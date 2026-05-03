@@ -994,7 +994,7 @@ func GeneratePresignedUrlInternal(conf *bce.BceClientConfiguration, signer auth.
 	}
 	err := validateObjectKey(object)
 	if method == http.GET && err != nil {
-		fmt.Printf("cannot generate presigned url: %v", err)
+		log.Warnf("cannot generate presigned url: %v", err)
 		return ""
 	}
 	req.SetMethod(method)

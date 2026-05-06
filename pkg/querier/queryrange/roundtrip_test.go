@@ -1201,11 +1201,6 @@ func Test_getOperation(t *testing.T) {
 			expectedOp: InstantQueryOp,
 		},
 		{
-			name:       "range_query_prom",
-			path:       "/loki/api/v1/query_range",
-			expectedOp: QueryRangeOp,
-		},
-		{
 			name:       "range_query",
 			path:       "/loki/api/v1/query_range",
 			expectedOp: QueryRangeOp,
@@ -1216,17 +1211,7 @@ func Test_getOperation(t *testing.T) {
 			expectedOp: SeriesOp,
 		},
 		{
-			name:       "series_query_prom",
-			path:       "/loki/api/v1/series",
-			expectedOp: SeriesOp,
-		},
-		{
 			name:       "labels_query",
-			path:       "/loki/api/v1/labels",
-			expectedOp: LabelNamesOp,
-		},
-		{
-			name:       "labels_query_prom",
 			path:       "/loki/api/v1/labels",
 			expectedOp: LabelNamesOp,
 		},
@@ -1236,17 +1221,7 @@ func Test_getOperation(t *testing.T) {
 			expectedOp: LabelNamesOp,
 		},
 		{
-			name:       "labels_query_prom",
-			path:       "/loki/api/v1/label",
-			expectedOp: LabelNamesOp,
-		},
-		{
 			name:       "label_values_query",
-			path:       "/loki/api/v1/label/__name__/values",
-			expectedOp: LabelNamesOp,
-		},
-		{
-			name:       "label_values_query_prom",
 			path:       "/loki/api/v1/label/__name__/values",
 			expectedOp: LabelNamesOp,
 		},

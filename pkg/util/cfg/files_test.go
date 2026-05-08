@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/grafana/dskit/flagext"
 	"github.com/stretchr/testify/assert"
@@ -32,6 +33,21 @@ func TestConfigFileLoaderDoesNotMutate(t *testing.T) {
 
 	cfg.RegisterFlags(nil)
 	require.Equal(t, 1, cfg.v)
+}
+
+func TestFindConfigFileFromArgsSkipsMalformedFlags(t *testing.T) {
+	result := make(chan string, 1)
+	go func() {
+		configFile, _ := FindConfigFileFromArgs([]string{"---foo", "-config.file", "config.yaml"}, "config.file")
+		result <- configFile
+	}()
+
+	select {
+	case configFile := <-result:
+		require.Equal(t, "config.yaml", configFile)
+	case <-time.After(time.Second):
+		t.Fatal("FindConfigFileFromArgs did not return")
+	}
 }
 
 func writeConfigFile(t *testing.T, content string) string {

@@ -34,6 +34,35 @@ func TestConfigFileLoaderDoesNotMutate(t *testing.T) {
 	require.Equal(t, 1, cfg.v)
 }
 
+func TestFindConfigFileFromArgsSkipsUnknownFlags(t *testing.T) {
+	tests := []struct {
+		name          string
+		args          []string
+		wantConfig    string
+		wantExpandEnv bool
+	}{
+		{
+			name:          "continues after consumed known flags",
+			args:          []string{"-config.file", "config.yaml", "-unknown.flag", "-config.expand-env"},
+			wantConfig:    "config.yaml",
+			wantExpandEnv: true,
+		},
+		{
+			name:       "skips unknown flag value",
+			args:       []string{"-target", "all", "-config.file", "config.yaml"},
+			wantConfig: "config.yaml",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configFile, expandEnv := FindConfigFileFromArgs(tt.args, "config.file")
+			assert.Equal(t, tt.wantConfig, configFile)
+			assert.Equal(t, tt.wantExpandEnv, expandEnv)
+		})
+	}
+}
+
 func writeConfigFile(t *testing.T, content string) string {
 	t.Helper()
 	f, err := os.CreateTemp(t.TempDir(), "config-*.yaml")

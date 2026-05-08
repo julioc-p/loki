@@ -98,11 +98,15 @@ func FindConfigFileFromArgs(args []string, name string) (configFile string, expa
 
 	remaining := args
 	for len(remaining) > 0 {
-		// Parse as many flags as possible, then skip over the first unrecognised arg.
+		// Parse as many flags as possible. On error, fs.Args() returns the unparsed
+		// remainder starting after the unknown flag name
 		if err := fs.Parse(remaining); err == nil {
 			break
 		}
-		remaining = remaining[1:]
+		remaining = fs.Args()
+		if len(remaining) > 0 && !strings.HasPrefix(remaining[0], "-") {
+			remaining = remaining[1:]
+		}
 	}
 	return
 }

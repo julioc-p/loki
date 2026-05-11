@@ -820,7 +820,7 @@ func (p *planner) processParallelizeNode(node *physical.Parallelize) ([]*Task, e
 		// If the ScanTarget includes a predicate that clamps the time range, we need to make sure
 		// only the RangeAggregation for that specific ScanTarget is also clamped.
 		visited := map[physical.Node]bool{}
-		for _, p := range shardedPlan.Parents(shard) {
+		for _, p := range slices.Clone(shardedPlan.Parents(shard)) {
 			cloneAllNodes(p, shardedPlan, shardTemplateSources, visited)
 		}
 

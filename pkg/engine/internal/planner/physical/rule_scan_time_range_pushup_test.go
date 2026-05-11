@@ -82,6 +82,42 @@ func TestScanTimeRangePushup(t *testing.T) {
 		expected := PrintAsTree(expectedPlan)
 		require.Equal(t, expected, actual)
 	})
+	t.Run("scan time range before query jumps directly to the first step after start", func(t *testing.T) {
+		plan := &Plan{}
+		{
+			dataObjScan := plan.graph.Add(&DataObjScan{MaxTimeRange: TimeRange{Start: time.Date(2026, 3, 14, 16, 0, 0, 0, time.UTC),
+				End: time.Date(2026, 3, 14, 16, 0, 0, 0, time.UTC)}})
+			rangeAgg := plan.graph.Add(&RangeAggregation{
+				Start: time.Date(2026, 3, 14, 16, 10, 0, 0, time.UTC),
+				End:   time.Date(2026, 3, 14, 16, 20, 0, 0, time.UTC),
+				Step:  time.Millisecond, Range: 0})
+			_ = plan.graph.AddEdge(dag.Edge[Node]{Parent: rangeAgg, Child: dataObjScan})
+		}
+
+		// apply optimisations
+		optimizations := []*Optimization{
+			newOptimization("scan time range pushup", plan).withRules(
+				&scanTimeRangePushup{plan: plan},
+			),
+		}
+		o := NewOptimizer(plan, optimizations)
+		o.Optimize(plan.Roots()[0])
+
+		expectedPlan := &Plan{}
+		{
+			dataObjScan := expectedPlan.graph.Add(&DataObjScan{MaxTimeRange: TimeRange{Start: time.Date(2026, 3, 14, 16, 0, 0, 0, time.UTC),
+				End: time.Date(2026, 3, 14, 16, 0, 0, 0, time.UTC)}})
+			rangeAgg := expectedPlan.graph.Add(&RangeAggregation{
+				Start: time.Date(2026, 3, 14, 16, 10, 0, 0, time.UTC),
+				End:   time.Date(2026, 3, 14, 16, 10, 0, int(time.Millisecond), time.UTC),
+				Step:  time.Millisecond, Range: 0})
+			_ = expectedPlan.graph.AddEdge(dag.Edge[Node]{Parent: rangeAgg, Child: dataObjScan})
+		}
+
+		actual := PrintAsTree(plan)
+		expected := PrintAsTree(expectedPlan)
+		require.Equal(t, expected, actual)
+	})
 	t.Run("unusual step still rounds scan time range in RangeAggregation", func(t *testing.T) {
 		plan := &Plan{}
 		{

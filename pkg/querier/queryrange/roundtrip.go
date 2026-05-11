@@ -602,7 +602,7 @@ const (
 
 func getOperation(path string) string {
 	switch {
-	case strings.HasSuffix(path, "/query_range") || strings.HasSuffix(path, "/prom/query"):
+	case strings.HasSuffix(path, "/query_range"):
 		return QueryRangeOp
 	case strings.HasSuffix(path, "/query"):
 		return InstantQueryOp

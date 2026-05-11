@@ -166,6 +166,10 @@ func (s CPUSetDynamic) size() uintptr {
 	return uintptr(len(s)) * unsafe.Sizeof(cpuMask(0))
 }
 
+func (s CPUSetDynamic) bits() uintptr {
+	return uintptr(len(s)) * _NCPUBITS
+}
+
 func (s CPUSetDynamic) pointer() unsafe.Pointer {
 	if len(s) == 0 {
 		return nil

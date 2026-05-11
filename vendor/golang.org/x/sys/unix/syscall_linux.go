@@ -2651,5 +2651,5 @@ func SetMemPolicy(mode int, mask *CPUSet) error {
 }
 
 func SetMemPolicyDynamic(mode int, mask CPUSetDynamic) error {
-	return setMemPolicy(mode, mask.pointer(), mask.size())
+	return setMemPolicy(mode, mask.pointer(), mask.bits())
 }

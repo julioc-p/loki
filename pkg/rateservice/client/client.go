@@ -41,7 +41,8 @@ type Client struct {
 func NewClient(cfg Config) (*Client, error) {
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithDefaultCallOptions(cfg.GRPCClientConfig.CallOptions()...))
-	dialOpts, err := cfg.GRPCClientConfig.DialOption(nil, nil, middleware.NoOpInvalidClusterValidationReporter)
+	unaryInterceptors, streamInterceptors := getGRPCInterceptors(&cfg)
+	dialOpts, err := cfg.GRPCClientConfig.DialOption(unaryInterceptors, streamInterceptors, middleware.NoOpInvalidClusterValidationReporter)
 	if err != nil {
 		return nil, err
 	}
@@ -55,4 +56,23 @@ func NewClient(cfg Config) (*Client, error) {
 		HealthClient:      grpc_health_v1.NewHealthClient(conn),
 		Closer:            conn,
 	}, nil
+}
+
+func getGRPCInterceptors(cfg *Config) ([]grpc.UnaryClientInterceptor, []grpc.StreamClientInterceptor) {
+	var (
+		unaryInterceptors  []grpc.UnaryClientInterceptor
+		streamInterceptors []grpc.StreamClientInterceptor
+	)
+
+	unaryInterceptors = append(unaryInterceptors, cfg.GRPCUnaryClientInterceptors...)
+	if !cfg.Internal {
+		unaryInterceptors = append(unaryInterceptors, middleware.ClientUserHeaderInterceptor)
+	}
+
+	streamInterceptors = append(streamInterceptors, cfg.GRCPStreamClientInterceptors...)
+	if !cfg.Internal {
+		streamInterceptors = append(streamInterceptors, middleware.StreamClientUserHeaderInterceptor)
+	}
+
+	return unaryInterceptors, streamInterceptors
 }

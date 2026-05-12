@@ -27,10 +27,10 @@ func (cfg *Config) Validate() error {
 		// Do not validate if disabled.
 		return nil
 	}
-	if cfg.WindowSecs <= 0 {
+	if cfg.WindowSecs == 0 {
 		return errors.New("window must be positive duration")
 	}
-	if cfg.BucketSizeSecs <= 0 {
+	if cfg.BucketSizeSecs == 0 {
 		return errors.New("bucket size must be positive")
 	}
 	if cfg.WindowSecs%cfg.BucketSizeSecs != 0 {

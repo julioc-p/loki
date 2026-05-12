@@ -23,7 +23,7 @@ func (cfg *Config) RegisterFlags(f *flag.FlagSet) {
 
 func (cfg *Config) RegisterFlagsWithPrefix(prefix string, f *flag.FlagSet) {
 	cfg.GRPCClientConfig.RegisterFlagsWithPrefix(prefix, f)
-	f.StringVar(&cfg.Address, "address", "", "The address of the rate service.")
+	f.StringVar(&cfg.Address, prefix+".address", "", "The address of the rate service.")
 }
 
 type Client struct {

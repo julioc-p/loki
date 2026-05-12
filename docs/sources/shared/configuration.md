@@ -1650,7 +1650,7 @@ rate_service:
 
 rate_service_client:
   # The address of the rate service.
-  # CLI flag: -address
+  # CLI flag: -rate-service-client.address
   [address: <string> | default = ""]
 
   # Configures client gRPC connections to limits service.

@@ -871,6 +871,7 @@ func (t *Loki) setupModuleManager() error {
 		DataObjConsumer:              {MemberlistKV, ScratchStore, PartitionRing, Server, UI},
 		DataObjIndexBuilder:          {ScratchStore, Server, UIRing},
 		DataObjCompactionPlanner:     {Server, UIRing},
+		RateService:                  {Server},
 		ScratchStore:                 {},
 
 		Read:    {QueryFrontend, Querier},

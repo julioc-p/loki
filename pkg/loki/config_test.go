@@ -110,3 +110,43 @@ func TestCrossComponentValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateRateServiceConfig(t *testing.T) {
+	cfg := &Config{
+		Ingester: ingester.Config{
+			IndexShards: 32,
+		},
+		SchemaConfig: config.SchemaConfig{
+			Configs: []config.PeriodConfig{
+				{
+					From: config.DayTime{
+						Time: model.Now(),
+					},
+					IndexType:  types.TSDBType,
+					ObjectType: types.StorageTypeS3,
+					Schema:     "v13",
+					IndexTables: config.IndexPeriodicTableConfig{
+						PeriodicTableConfig: config.PeriodicTableConfig{
+							Period: 24 * time.Hour,
+						},
+					},
+					RowShards: 16,
+				},
+			},
+		},
+	}
+	cfg.RegisterFlags(flag.NewFlagSet(t.Name(), 0))
+	cfg.QueryRange.CacheIndexStatsResults = false
+	cfg.QueryRange.CacheSeriesResults = false
+	cfg.QueryRange.CacheLabelResults = false
+	cfg.QueryRange.CacheVolumeResults = false
+	cfg.CompactorConfig.WorkingDirectory = "tmp"
+	cfg.StorageConfig.TSDBShipperConfig.ActiveIndexDirectory = "tmp"
+	cfg.StorageConfig.TSDBShipperConfig.CacheLocation = "tmp"
+	cfg.RateService.Enabled = true
+	cfg.RateService.BucketSizeSecs = 0
+
+	err := cfg.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "CONFIG ERROR: invalid rateservice config")
+}

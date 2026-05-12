@@ -8,6 +8,7 @@ import (
 	"google.golang.org/grpc/health/grpc_health_v1"
 
 	"github.com/grafana/dskit/grpcclient"
+	"github.com/grafana/dskit/middleware"
 	"github.com/grafana/loki/v3/pkg/rateservice/proto"
 )
 
@@ -40,6 +41,11 @@ type Client struct {
 func NewClient(cfg Config) (*Client, error) {
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithDefaultCallOptions(cfg.GRPCClientConfig.CallOptions()...))
+	dialOpts, err := cfg.GRPCClientConfig.DialOption(cfg.GRPCUnaryClientInterceptors, cfg.GRCPStreamClientInterceptors, middleware.NoOpInvalidClusterValidationReporter)
+	if err != nil {
+		return nil, err
+	}
+	opts = append(opts, dialOpts...)
 	conn, err := grpc.NewClient(cfg.Address, opts...)
 	if err != nil {
 		return nil, err

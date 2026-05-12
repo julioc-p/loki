@@ -71,6 +71,7 @@ import (
 	"github.com/grafana/loki/v3/pkg/querier/queryrange/queryrangebase"
 	"github.com/grafana/loki/v3/pkg/querier/tail"
 	"github.com/grafana/loki/v3/pkg/rateservice"
+	rateserviceproto "github.com/grafana/loki/v3/pkg/rateservice/proto"
 	"github.com/grafana/loki/v3/pkg/ruler"
 	base_ruler "github.com/grafana/loki/v3/pkg/ruler/base"
 	"github.com/grafana/loki/v3/pkg/ruler/rulestore/local"
@@ -885,6 +886,7 @@ func (t *Loki) initRateService() (services.Service, error) {
 		util_log.Logger,
 	)
 
+	rateserviceproto.RegisterRateServiceServer(t.Server.GRPC, t.rateService)
 	t.Server.HTTP.Path("/rate-service/realm/{realm}").Methods("GET").HandlerFunc(t.rateService.GetRealmHandler)
 
 	return t.rateService, nil

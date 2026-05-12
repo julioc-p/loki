@@ -173,7 +173,7 @@ func bucketsInWindow(buckets iter.Seq[rateBucket], windowSecs, nowSecs uint64) i
 	return func(yield func(rateBucket) bool) {
 		startTs := nowSecs - windowSecs
 		for bucket := range buckets {
-			if bucket.ts > startTs && bucket.ts <= nowSecs {
+			if bucket.ts >= startTs && bucket.ts <= nowSecs {
 				if !yield(bucket) {
 					return
 				}

@@ -1,6 +1,7 @@
 package rateservice
 
 import (
+	"slices"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -131,4 +132,16 @@ func TestRateStore_UpdateRealm(t *testing.T) {
 			require.Equal(t, expected, buckets)
 		})
 	})
+}
+
+func TestBucketsInWindow(t *testing.T) {
+	buckets := []rateBucket{
+		{ts: 0, value: 100},
+		{ts: 15, value: 200},
+		{ts: 30, value: 300},
+		{ts: 315, value: 400},
+		{ts: 330, value: 500},
+	}
+
+	require.Equal(t, uint64(300), reduceBuckets(bucketsInWindow(slices.Values(buckets), 300, 315)))
 }

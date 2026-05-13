@@ -319,9 +319,7 @@ func (c *Producer) ProduceSync(ctx context.Context, records []*kgo.Record) kgo.P
 	c.produceRequestsTotal.Add(float64(len(records)))
 
 	onProduceDone := func(r *kgo.Record, err error) {
-		if c.maxBufferedBytes > 0 {
-			c.bufferedBytes.Add(-int64(len(r.Value)))
-		}
+		c.releaseBufferedBytes(len(r.Value))
 
 		resMx.Lock()
 		res = append(res, kgo.ProduceResult{Record: r, Err: err})
@@ -340,12 +338,12 @@ func (c *Producer) ProduceSync(ctx context.Context, records []*kgo.Record) kgo.P
 	}
 
 	// Check that all records can fit within the limit.
-	var totalSize int64
+	var totalSize int
 	for _, record := range records {
-		totalSize += int64(len(record.Value))
+		totalSize += len(record.Value)
 	}
 
-	if c.maxBufferedBytes > 0 && c.bufferedBytes.Add(totalSize) > c.maxBufferedBytes {
+	if c.tryReserveBufferedBytes(totalSize) {
 		// The records exceed what is left of the limit, we must fail them.
 		for _, record := range records {
 			// onProduceDone will dec the counter.
@@ -373,6 +371,37 @@ func (c *Producer) ProduceSync(ctx context.Context, records []*kgo.Record) kgo.P
 		// Once we're done, it's guaranteed that no more results will be appended, so we can safely return it.
 		return res
 	}
+}
+
+// tryReserveBufferedBytes returns true if size can be reserved, otherwise false.
+// It always returns true when maxBufferedBytes is 0.
+func (c *Producer) tryReserveBufferedBytes(size int) bool {
+	if c.maxBufferedBytes <= 0 {
+		// The limit is disabled, size can be reserved.
+		return true
+	}
+	for {
+		oldVal := c.bufferedBytes.Load()
+		newVal := oldVal + int64(size)
+		if newVal > c.maxBufferedBytes {
+			// size exceeds the limit, so cannot be reserved.
+			return false
+		}
+		// If we won the CAS, our new size was reserved, and we can return true.
+		// If someone else won the CAS, we must loop and make another attempt.
+		if c.bufferedBytes.CompareAndSwap(oldVal, newVal) {
+			return true
+		}
+	}
+}
+
+// reelaseBufferedBytes releases the size from the buffered bytes counter.
+// It is a no-op when maxBufferedBytes is 0.
+func (c *Producer) releaseBufferedBytes(size int) {
+	if c.maxBufferedBytes <= 0 {
+		return
+	}
+	c.bufferedBytes.Add(-int64(size))
 }
 
 // produceResultsForErr returns a [kgo.ProduceResults] that contains all records and

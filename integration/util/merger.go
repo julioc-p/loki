@@ -50,5 +50,28 @@ func yamlToMap(fragment []byte) (interface{}, error) {
 		return nil, err
 	}
 
-	return fragmentMap, nil
+	return normalizeYAMLMap(fragmentMap), nil
+}
+
+func normalizeYAMLMap(value interface{}) interface{} {
+	switch typedValue := value.(type) {
+	case map[interface{}]interface{}:
+		for key, nestedValue := range typedValue {
+			typedValue[key] = normalizeYAMLMap(nestedValue)
+		}
+		return typedValue
+	case map[string]interface{}:
+		normalizedMap := make(map[interface{}]interface{}, len(typedValue))
+		for key, nestedValue := range typedValue {
+			normalizedMap[key] = normalizeYAMLMap(nestedValue)
+		}
+		return normalizedMap
+	case []interface{}:
+		for i, nestedValue := range typedValue {
+			typedValue[i] = normalizeYAMLMap(nestedValue)
+		}
+		return typedValue
+	default:
+		return value
+	}
 }

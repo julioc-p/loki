@@ -375,7 +375,7 @@ func walkRangeAggregation(e *syntax.RangeAggregationExpr, wc *walkContext) (Valu
 	}
 
 	builder = builder.RangeAggregation(
-		convertGrouping(e.Grouping), rangeAggType, wc.params.Start(), wc.params.End(), wc.params.Step(), rangeInterval,
+		convertRangeAggregationGrouping(e.Grouping), rangeAggType, wc.params.Start(), wc.params.End(), wc.params.Step(), rangeInterval,
 	)
 
 	switch e.Operation {
@@ -710,6 +710,15 @@ func convertGrouping(g *syntax.Grouping) Grouping {
 		Columns: columns,
 		Without: g.Without,
 	}
+}
+
+func convertRangeAggregationGrouping(g *syntax.Grouping) Grouping {
+	if g == nil {
+		// A range aggregation without an explicit by/without clause preserves input label sets.
+		return Grouping{Without: true}
+	}
+
+	return convertGrouping(g)
 }
 
 func parseShards(shards []string) (*ShardInfo, error) {

@@ -228,7 +228,7 @@ func TestConvertAST_MetricQuery_Success(t *testing.T) {
 %8 = LT builtin.timestamp 1970-01-01T02:00:00Z
 %9 = SELECT %7 [predicate=%8]
 %10 = SELECT %9 [predicate=%4]
-%11 = RANGE_AGGREGATION %10 [group_by=(), operation=count, start_ts=1970-01-01T01:00:00Z, end_ts=1970-01-01T02:00:00Z, step=0s, range=5m0s]
+%11 = RANGE_AGGREGATION %10 [operation=count, start_ts=1970-01-01T01:00:00Z, end_ts=1970-01-01T02:00:00Z, step=0s, range=5m0s]
 %12 = VECTOR_AGGREGATION %11 [operation=sum, group_by=(ambiguous.level)]
 %13 = LOGQL_COMPAT %12
 RETURN %13
@@ -264,7 +264,7 @@ RETURN %13
 %8 = LT builtin.timestamp 1970-01-01T02:00:00Z
 %9 = SELECT %7 [predicate=%8]
 %10 = SELECT %9 [predicate=%4]
-%11 = RANGE_AGGREGATION %10 [group_by=(), operation=count, start_ts=1970-01-01T01:00:00Z, end_ts=1970-01-01T02:00:00Z, step=0s, range=5m0s]
+%11 = RANGE_AGGREGATION %10 [operation=count, start_ts=1970-01-01T01:00:00Z, end_ts=1970-01-01T02:00:00Z, step=0s, range=5m0s]
 %12 = VECTOR_AGGREGATION %11 [operation=sum, group_by=()]
 %13 = LOGQL_COMPAT %12
 RETURN %13
@@ -298,7 +298,7 @@ RETURN %13
 %6 = SELECT %4 [predicate=%5]
 %7 = LT builtin.timestamp 1970-01-01T02:00:00Z
 %8 = SELECT %6 [predicate=%7]
-%9 = RANGE_AGGREGATION %8 [group_by=(), operation=count, start_ts=1970-01-01T01:00:00Z, end_ts=1970-01-01T02:00:00Z, step=0s, range=5m0s]
+%9 = RANGE_AGGREGATION %8 [operation=count, start_ts=1970-01-01T01:00:00Z, end_ts=1970-01-01T02:00:00Z, step=0s, range=5m0s]
 %10 = DIV %9 300
 %11 = VECTOR_AGGREGATION %10 [operation=sum, group_by=(ambiguous.level)]
 %12 = LOGQL_COMPAT %11
@@ -331,7 +331,7 @@ RETURN %12
 %4 = SELECT %2 [predicate=%3]
 %5 = LT builtin.timestamp 1970-01-01T02:00:00Z
 %6 = SELECT %4 [predicate=%5]
-%7 = RANGE_AGGREGATION %6 [group_by=(), operation=count, start_ts=1970-01-01T01:00:00Z, end_ts=1970-01-01T02:00:00Z, step=0s, range=5m0s]
+%7 = RANGE_AGGREGATION %6 [operation=count, start_ts=1970-01-01T01:00:00Z, end_ts=1970-01-01T02:00:00Z, step=0s, range=5m0s]
 %8 = DIV %7 300
 %9 = SUB %8 100
 %10 = POW %9 2
@@ -366,7 +366,7 @@ RETURN %12
 %4 = SELECT %2 [predicate=%3]
 %5 = LT builtin.timestamp 1970-01-01T02:00:00Z
 %6 = SELECT %4 [predicate=%5]
-%7 = RANGE_AGGREGATION %6 [group_by=(), operation=count, start_ts=1970-01-01T01:00:00Z, end_ts=1970-01-01T02:00:00Z, step=0s, range=5m0s]
+%7 = RANGE_AGGREGATION %6 [operation=count, start_ts=1970-01-01T01:00:00Z, end_ts=1970-01-01T02:00:00Z, step=0s, range=5m0s]
 %8 = DIV %7 300
 %9 = SUB %8 100
 %10 = POW %9 2
@@ -622,6 +622,38 @@ RETURN %17
 	})
 }
 
+func TestConvertAST_RangeAggregationWithoutExplicitGroupingPreservesLabels(t *testing.T) {
+	q := &query{
+		statement: `sum by (level) (count_over_time({cluster="prod", namespace=~"loki-.*"} |= "metric.go"[5m]))`,
+		start:     3600,
+		end:       7200,
+		interval:  5 * time.Minute,
+	}
+
+	logicalPlan, err := BuildPlan(context.Background(), q)
+	require.NoError(t, err)
+
+	var rangeAgg *RangeAggregation
+	var vectorAgg *VectorAggregation
+	for _, inst := range logicalPlan.Instructions {
+		switch inst := inst.(type) {
+		case *RangeAggregation:
+			rangeAgg = inst
+		case *VectorAggregation:
+			vectorAgg = inst
+		}
+	}
+
+	require.NotNil(t, rangeAgg)
+	require.True(t, rangeAgg.Grouping.Without)
+	require.Empty(t, rangeAgg.Grouping.Columns)
+
+	require.NotNil(t, vectorAgg)
+	require.False(t, vectorAgg.Grouping.Without)
+	require.Len(t, vectorAgg.Grouping.Columns, 1)
+	require.Equal(t, "level", vectorAgg.Grouping.Columns[0].Ref.Column)
+}
+
 func TestPlannerCreatesCastOperationForUnwrap(t *testing.T) {
 	t.Run("creates projection with unary cast operation instruction for metric query with unwrap duration", func(t *testing.T) {
 		// Query with duration unwrap in a sum_over_time metric query
@@ -652,7 +684,7 @@ func TestPlannerCreatesCastOperationForUnwrap(t *testing.T) {
 %11 = EQ generated.__error_details__ ""
 %12 = AND %10 %11
 %13 = SELECT %9 [predicate=%12]
-%14 = RANGE_AGGREGATION %13 [group_by=(), operation=sum, start_ts=1970-01-01T01:00:00Z, end_ts=1970-01-01T02:00:00Z, step=0s, range=5m0s]
+%14 = RANGE_AGGREGATION %13 [operation=sum, start_ts=1970-01-01T01:00:00Z, end_ts=1970-01-01T02:00:00Z, step=0s, range=5m0s]
 %15 = VECTOR_AGGREGATION %14 [operation=sum, group_by=(ambiguous.status)]
 %16 = LOGQL_COMPAT %15
 RETURN %16
@@ -687,7 +719,7 @@ func TestPlannerCreatesProjectionWithParseOperation(t *testing.T) {
 %8 = PROJECT %6 [mode=*E, expr=%7]
 %9 = EQ ambiguous.level "error"
 %10 = SELECT %8 [predicate=%9]
-%11 = RANGE_AGGREGATION %10 [group_by=(), operation=count, start_ts=1970-01-01T01:00:00Z, end_ts=1970-01-01T02:00:00Z, step=0s, range=5m0s]
+%11 = RANGE_AGGREGATION %10 [operation=count, start_ts=1970-01-01T01:00:00Z, end_ts=1970-01-01T02:00:00Z, step=0s, range=5m0s]
 %12 = VECTOR_AGGREGATION %11 [operation=sum, group_by=(ambiguous.level)]
 %13 = LOGQL_COMPAT %12
 RETURN %13
@@ -750,7 +782,7 @@ RETURN %12
 %8 = PROJECT %6 [mode=*E, expr=%7]
 %9 = EQ ambiguous.level "error"
 %10 = SELECT %8 [predicate=%9]
-%11 = RANGE_AGGREGATION %10 [group_by=(), operation=count, start_ts=1970-01-01T01:00:00Z, end_ts=1970-01-01T02:00:00Z, step=0s, range=5m0s]
+%11 = RANGE_AGGREGATION %10 [operation=count, start_ts=1970-01-01T01:00:00Z, end_ts=1970-01-01T02:00:00Z, step=0s, range=5m0s]
 %12 = VECTOR_AGGREGATION %11 [operation=sum, group_by=(ambiguous.level)]
 %13 = LOGQL_COMPAT %12
 RETURN %13
@@ -813,7 +845,7 @@ RETURN %12
 %8 = PROJECT %6 [mode=*E, expr=%7]
 %9 = EQ ambiguous.foo "bar"
 %10 = SELECT %8 [predicate=%9]
-%11 = RANGE_AGGREGATION %10 [group_by=(), operation=count, start_ts=1970-01-01T01:00:00Z, end_ts=1970-01-01T02:00:00Z, step=0s, range=5m0s]
+%11 = RANGE_AGGREGATION %10 [operation=count, start_ts=1970-01-01T01:00:00Z, end_ts=1970-01-01T02:00:00Z, step=0s, range=5m0s]
 %12 = VECTOR_AGGREGATION %11 [operation=sum, group_by=(ambiguous.foo)]
 %13 = LOGQL_COMPAT %12
 RETURN %13
@@ -940,7 +972,7 @@ RETURN %16
 %12 = PROJECT %10 [mode=*E, expr=%11]
 %13 = EQ ambiguous.level "debug"
 %14 = SELECT %12 [predicate=%13]
-%15 = RANGE_AGGREGATION %14 [group_by=(), operation=count, start_ts=1970-01-01T01:00:00Z, end_ts=1970-01-01T02:00:00Z, step=0s, range=5m0s]
+%15 = RANGE_AGGREGATION %14 [operation=count, start_ts=1970-01-01T01:00:00Z, end_ts=1970-01-01T02:00:00Z, step=0s, range=5m0s]
 %16 = VECTOR_AGGREGATION %15 [operation=sum, group_by=(ambiguous.level)]
 %17 = LOGQL_COMPAT %16
 RETURN %17

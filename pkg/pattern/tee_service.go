@@ -500,7 +500,7 @@ func (ts *TeeService) tryReserveBufferedBytes(size int) bool {
 		oldVal := ts.bufferedBytes.Load()
 		newVal := oldVal + int64(size)
 		if newVal > maxBufferedBytes {
-			// size exceeds the limit, so cannot be reserved.
+			// size exceeds the limit, cannot be reserved.
 			return false
 		}
 		// If we won the CAS, our new size was reserved, and we can return true.

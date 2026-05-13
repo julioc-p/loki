@@ -38,7 +38,6 @@ import (
 	"github.com/grafana/loki/v3/pkg/storage/stores"
 	"github.com/grafana/loki/v3/pkg/storage/stores/index"
 	"github.com/grafana/loki/v3/pkg/storage/stores/series"
-	series_index "github.com/grafana/loki/v3/pkg/storage/stores/series/index"
 	"github.com/grafana/loki/v3/pkg/storage/stores/shipper/indexshipper"
 	"github.com/grafana/loki/v3/pkg/storage/stores/shipper/indexshipper/tsdb"
 	"github.com/grafana/loki/v3/pkg/util"
@@ -300,32 +299,7 @@ func (s *LokiStore) storeForPeriod(p config.PeriodConfig, tableRange config.Tabl
 				objectClient.Stop()
 			}, nil
 	}
-
-	idx, err := NewIndexClient(component, p, tableRange, s.cfg, s.schemaCfg, s.limits, s.clientMetrics, nil, indexClientReg, indexClientLogger, s.metricsNamespace)
-	if err != nil {
-		return nil, nil, nil, errors.Wrap(err, "error creating index client")
-	}
-	idx = series_index.NewCachingIndexClient(idx, s.indexReadCache, s.cfg.IndexCacheValidity, s.limits, indexClientLogger, s.cfg.DisableBroadIndexQueries)
-	schema, err := series_index.CreateSchema(p)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	if s.storeCfg.CacheLookupsOlderThan != 0 {
-		schema = series_index.NewSchemaCaching(schema, time.Duration(s.storeCfg.CacheLookupsOlderThan))
-	}
-
-	indexReaderWriter := series.NewIndexReaderWriter(s.schemaCfg, schema, idx, f, s.cfg.MaxChunkBatchSize, s.writeDedupeCache)
-	monitoredReaderWriter := index.NewMonitoredReaderWriter(indexReaderWriter, indexClientReg)
-	chunkWriter := stores.NewChunkWriter(f, s.schemaCfg, monitoredReaderWriter, s.storeCfg.DisableIndexDeduplication)
-
-	return chunkWriter,
-		monitoredReaderWriter,
-		func() {
-			chunkClient.Stop()
-			f.Stop()
-			idx.Stop()
-		},
-		nil
+	panic("using non-tsdb index")
 }
 
 // decodeReq sanitizes an incoming request, rounds bounds, appends the __name__ matcher,

@@ -318,9 +318,10 @@ func (c *Producer) ProduceSync(ctx context.Context, records []*kgo.Record) kgo.P
 
 	c.produceRequestsTotal.Add(float64(len(records)))
 
-	onProduceDone := func(r *kgo.Record, err error) {
-		c.releaseBufferedBytes(len(r.Value))
-
+	onProduceDone := func(r *kgo.Record, err error, releaseBufferedBytes bool) {
+		if releaseBufferedBytes {
+			c.releaseBufferedBytes(len(r.Value))
+		}
 		resMx.Lock()
 		res = append(res, kgo.ProduceResult{Record: r, Err: err})
 		resMx.Unlock()
@@ -343,11 +344,10 @@ func (c *Producer) ProduceSync(ctx context.Context, records []*kgo.Record) kgo.P
 		totalSize += len(record.Value)
 	}
 
-	if c.tryReserveBufferedBytes(totalSize) {
+	if !c.tryReserveBufferedBytes(totalSize) {
 		// The records exceed what is left of the limit, we must fail them.
 		for _, record := range records {
-			// onProduceDone will dec the counter.
-			onProduceDone(record, kgo.ErrMaxBuffered)
+			onProduceDone(record, kgo.ErrMaxBuffered, false)
 		}
 	} else {
 		for _, record := range records {
@@ -359,7 +359,9 @@ func (c *Producer) ProduceSync(ctx context.Context, records []*kgo.Record) kgo.P
 			// Produce() may theoretically block if the buffer is full, but we configure the Kafka client with
 			// unlimited buffer because we implement the buffer limit ourselves (see maxBufferedBytes). This means
 			// Produce() should never block for us in practice.
-			c.Produce(context.WithoutCancel(ctx), record, onProduceDone)
+			c.Produce(context.WithoutCancel(ctx), record, func(r *kgo.Record, err error) {
+				onProduceDone(r, err, true)
+			})
 		}
 	}
 

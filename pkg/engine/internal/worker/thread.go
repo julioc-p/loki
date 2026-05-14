@@ -426,6 +426,9 @@ func (t *thread) drainPipeline(ctx context.Context, pipeline executor.Pipeline, 
 						level.Warn(logger).Log("msg", "failed to send result", "err", err)
 					}
 				}
+				region.Record(xcap.TaskRecordsSent.Observe(1))
+				region.Record(xcap.TaskRowsSent.Observe(rec.NumRows()))
+				region.Record(xcap.TaskWireBytes.Observe(recordBatchBytes(rec)))
 			} else {
 				// Send each sharded batch to its corresponding sink
 				for shardIdx, shardBatch := range shardedBatches {

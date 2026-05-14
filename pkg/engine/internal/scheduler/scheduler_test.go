@@ -619,6 +619,96 @@ func TestScheduler_worker(t *testing.T) {
 		}
 	})
 
+	t.Run("Redundant cancel of owned task waits for worker confirmation", func(t *testing.T) {
+		sched := newTestScheduler(t)
+
+		ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+		defer cancel()
+
+		conn, err := sched.DialFrom(ctx, wire.LocalWorker)
+		require.NoError(t, err)
+		defer conn.Close()
+
+		messages := make(chan wire.Message, 10)
+
+		peer := wire.Peer{
+			Logger:  log.NewNopLogger(),
+			Metrics: wire.NewMetrics(),
+			Conn:    conn,
+			Handler: func(ctx context.Context, _ *wire.Peer, message wire.Message) error {
+				select {
+				case <-ctx.Done():
+				case messages <- message:
+				}
+				return nil
+			},
+		}
+		go func() { _ = peer.Serve(ctx) }()
+
+		// Send a ready message so we get a task as soon as we create one.
+		require.NoError(t, peer.SendMessage(ctx, wire.WorkerHelloMessage{Threads: 1}), "Scheduler should accept hello message")
+		require.NoError(t, peer.SendMessage(ctx, wire.WorkerReadyMessage{}), "Scheduler should accept ready message")
+
+		var (
+			exampleTask = &workflow.Task{ULID: ulid.Make()}
+			manifest    = &workflow.Manifest{
+				Tasks:              []*workflow.Task{exampleTask},
+				StreamEventHandler: nopStreamHandler,
+				TaskEventHandler:   nopTaskHandler,
+			}
+		)
+		require.NoError(t, sched.RegisterManifest(t.Context(), manifest), "Scheduler should accept valid manifest")
+		require.NoError(t, sched.Start(t.Context(), exampleTask), "Scheduler should start registered task")
+
+		// Wait for assignment.
+	WaitAssign:
+		for {
+			select {
+			case <-ctx.Done():
+				require.Fail(t, "time out before receiving expected message")
+			case msg := <-messages:
+				switch msg.(type) {
+				case wire.WorkerSubscribeMessage:
+					continue // Ignore; we already sent WorkerReady
+				case wire.TaskAssignMessage:
+					break WaitAssign
+				default:
+					require.Fail(t, "Unexpected message type", "Unexpected message type %T", msg)
+				}
+			}
+		}
+
+		// Confirm the scheduler has finalized assignment before cancelling.
+		require.NoError(t, peer.SendMessage(ctx, wire.TaskStatusMessage{
+			ID:     exampleTask.ULID,
+			Status: workflow.TaskStatus{State: workflow.TaskStateRunning},
+		}), "Sending status message should succeed")
+
+		require.NoError(t, sched.Cancel(t.Context(), exampleTask), "Scheduler should permit cancellation of registered task")
+
+		// Wait for cancellation.
+		select {
+		case <-ctx.Done():
+			require.Fail(t, "time out before receiving expected message")
+		case msg := <-messages:
+			switch msg := msg.(type) {
+			case wire.TaskCancelMessage:
+				require.Equal(t, exampleTask.ULID, msg.ID, "Expected task should have been canceled")
+			default:
+				require.Fail(t, "Unexpected message type %T", msg)
+			}
+		}
+
+		require.NoError(t, sched.Cancel(t.Context(), exampleTask), "Scheduler should ignore redundant cancellation of owned task")
+
+		sched.resourcesMut.Lock()
+		registered := sched.tasks[exampleTask.ULID]
+		sched.resourcesMut.Unlock()
+
+		require.Equal(t, workflow.TaskStateRunning, registered.State(), "Scheduler should wait for worker confirmation")
+		require.True(t, registered.Interrupted(), "Scheduler should keep the task marked interrupted")
+	})
+
 	t.Run("Owned tasks are canceled upon connection loss", func(t *testing.T) {
 		var taskStatus atomic.Pointer[workflow.TaskStatus]
 		handler := func(_ context.Context, _ *workflow.Task, newStatus workflow.TaskStatus) {

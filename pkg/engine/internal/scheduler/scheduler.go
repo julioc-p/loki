@@ -1242,16 +1242,18 @@ func (s *Scheduler) Cancel(ctx context.Context, tasks ...*workflow.Task) error {
 
 		region := registered.wfRegion
 
-		if owner := registered.owner; owner != nil && registered.MarkInterrupted() {
-			// The task is currently running on a worker. We don't want to
-			// transition the task's state here so we can let the worker send
-			// final stats before acknowledging cancellation.
-			//
-			// The confirmation of cancellation will come in via
-			// handleTaskStatus. MarkInterrupted makes the cancel message
-			// at most once: a redundant Cancel for an already-interrupted task
-			// is a no-op.
-			_ = owner.SendMessageAsync(ctx, wire.TaskCancelMessage{ID: registered.inner.ULID})
+		if owner := registered.owner; owner != nil {
+			if registered.MarkInterrupted() {
+				// The task is currently running on a worker. We don't want to
+				// transition the task's state here so we can let the worker send
+				// final stats before acknowledging cancellation.
+				//
+				// The confirmation of cancellation will come in via
+				// handleTaskStatus. MarkInterrupted makes the cancel message
+				// at most once: a redundant Cancel for an already-interrupted task
+				// is a no-op.
+				_ = owner.SendMessageAsync(ctx, wire.TaskCancelMessage{ID: registered.inner.ULID})
+			}
 		} else if changed, _ := registered.SetState(s.metrics, workflow.TaskStatus{State: workflow.TaskStateCancelled}); changed {
 			// No worker is executing this task, so we transition the state
 			// directly as the scheduler is the source of truth.

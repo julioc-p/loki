@@ -99,7 +99,12 @@ type Object struct {
 func FromBucket(ctx context.Context, bucket objstore.BucketReader, path string, prefetchBytes int64) (*Object, error) {
 	rr := &bucketRangeReader{bucket: bucket, path: path}
 
-	dec := &decoder{rr: rr, prefetchBytes: prefetchBytes}
+	size, err := rr.Size(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("reading size: %w", err)
+	}
+
+	dec := &decoder{rr: rr, size: size, prefetchBytes: prefetchBytes}
 	obj := &Object{rr: rr, dec: dec}
 	if err := obj.init(ctx); err != nil {
 		return nil, err

@@ -34,6 +34,26 @@ func TestUTF8_SlicedSize(t *testing.T) {
 	require.Equal(t, 22, slicedSize)
 }
 
+func TestUTF8NormalizeTrimsZeroOffsetSlice(t *testing.T) {
+	alloc := memory.NewAllocator(nil)
+	defer alloc.Free()
+
+	b := columnar.NewUTF8Builder(alloc)
+	b.AppendValue([]byte("aa"))
+	b.AppendValue([]byte("bbbb"))
+	b.AppendValue([]byte("cccccc"))
+	arr := b.Build()
+
+	sliced := arr.Slice(0, 2).(*columnar.UTF8)
+	require.Equal(t, []byte("aabbbbcccccc"), sliced.Data())
+	require.Equal(t, 6, sliced.DataLen())
+
+	normalized := sliced.Normalize(alloc)
+	require.Equal(t, []byte("aabbbb"), normalized.Data())
+	require.Equal(t, normalized.DataLen(), len(normalized.Data()))
+	require.Equal(t, []int32{0, 2, 6}, normalized.Offsets())
+}
+
 func TestUTF8Builder_AppendManyValues(t *testing.T) {
 	// Regression test: UTF8Builder.needGrow only checked offsets capacity, not
 	// the validity bitmap. Because offsets (4 bytes each) and the bitmap (1 bit

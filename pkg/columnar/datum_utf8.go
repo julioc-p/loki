@@ -165,12 +165,15 @@ func (arr *UTF8) Slice(i, j int) Array {
 // only the referenced range. If the array is already normalized, it is returned
 // as-is. Otherwise, a new array is allocated from alloc.
 func (arr *UTF8) Normalize(alloc *memory.Allocator) *UTF8 {
-	if len(arr.offsets) == 0 || arr.offsets[0] == 0 {
+	if len(arr.offsets) == 0 {
 		return arr
 	}
 
 	dataStart := arr.offsets[0]
 	dataEnd := arr.offsets[len(arr.offsets)-1]
+	if dataStart == 0 && int(dataEnd) == len(arr.data) {
+		return arr
+	}
 
 	data := memory.NewBuffer[byte](alloc, int(dataEnd-dataStart))
 	data.Append(arr.data[dataStart:dataEnd]...)

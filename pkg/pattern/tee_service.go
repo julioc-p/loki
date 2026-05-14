@@ -516,7 +516,7 @@ func (ts *TeeService) permittedMaxBufferedBytes(newVal int64) bool {
 		// When zero or negative, the limit is disabled.
 		return true
 	}
-	return newVal > maxBufferedBytes
+	return newVal <= maxBufferedBytes
 }
 
 // releaseBufferedBytes returns size bytes of reserved capacity to the tee.

@@ -297,7 +297,13 @@ func (b *clusterImplBalancer) updateLoadStore(clusterUpdate *xdsresource.Cluster
 }
 
 func buildProviderFunc(configs map[string]*certprovider.BuildableConfig, instanceName, certName string, wantIdentity, wantRoot bool) (certprovider.Provider, error) {
-	cfg := configs[instanceName]
+	cfg, ok := configs[instanceName]
+	if !ok {
+		// Defensive programming. If a resource received from the management
+		// server contains a certificate provider instance name that is not
+		// found in the bootstrap, the resource is NACKed by the xDS client.
+		return nil, fmt.Errorf("xds: certificate provider instance %q not found in bootstrap file", instanceName)
+	}
 	provider, err := cfg.Build(certprovider.BuildOptions{
 		CertName:     certName,
 		WantIdentity: wantIdentity,

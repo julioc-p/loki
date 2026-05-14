@@ -113,6 +113,10 @@ func computeTimeShards(rec arrow.RecordBatch, timeRanges []physical.TimeRange, s
 		// No timestamp column - all rows go to shard 0
 		return nil
 	}
+	if timestampCol == nil {
+		// No timestamp column - all rows go to shard 0
+		return nil
+	}
 
 	if len(timeRanges) == 0 {
 		// No time ranges - all rows go to shard 0

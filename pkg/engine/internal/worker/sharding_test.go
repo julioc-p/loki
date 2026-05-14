@@ -292,6 +292,29 @@ func TestComputeTimeShards_NoTimeRanges(t *testing.T) {
 	}
 }
 
+func TestComputeTimeShards_NoTimestampColumn(t *testing.T) {
+	alloc := memory.NewGoAllocator()
+	schema := arrow.NewSchema([]arrow.Field{
+		{Name: "some_column", Type: arrow.BinaryTypes.String},
+	}, nil)
+
+	strBuilder := array.NewStringBuilder(alloc)
+	strBuilder.AppendValues([]string{"first", "second"}, nil)
+
+	rec := array.NewRecord(schema, []arrow.Array{strBuilder.NewArray()}, 2)
+	defer rec.Release()
+
+	shardIndices := make([]int, rec.NumRows())
+	timeRanges := []physical.TimeRange{
+		{Start: time.Unix(0, 0), End: time.Unix(100, 0)},
+		{Start: time.Unix(100, 0), End: time.Unix(200, 0)},
+	}
+
+	err := computeTimeShards(rec, timeRanges, shardIndices)
+	require.NoError(t, err)
+	require.Equal(t, []int{0, 0}, shardIndices)
+}
+
 func TestComputeTimeShards_SingleRange(t *testing.T) {
 	timestamps := []time.Time{
 		time.Unix(10, 0),

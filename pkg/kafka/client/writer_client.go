@@ -386,7 +386,7 @@ func (c *Producer) reserveBufferedBytes(size int) bool {
 	for {
 		oldVal := c.bufferedBytes.Load()
 		newVal := oldVal + int64(size)
-		if c.maxBufferedBytes >= 0 && newVal > c.maxBufferedBytes {
+		if c.maxBufferedBytes > 0 && newVal > c.maxBufferedBytes {
 			// If the limit is non-zero, we must first check that size can be reserved.
 			return false
 		}

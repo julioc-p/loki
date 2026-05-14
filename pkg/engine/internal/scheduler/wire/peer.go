@@ -277,7 +277,6 @@ func (p *Peer) SendMessageAsync(ctx context.Context, message Message) error {
 // enqueueFrame enqueues a frame to be sent to the remote peer.
 func (p *Peer) enqueueFrame(ctx context.Context, frame Frame) error {
 	timer := p.Metrics.newEnqueueOutgoingTimer()
-	defer timer.ObserveDuration()
 
 	select {
 	case <-ctx.Done():
@@ -285,6 +284,7 @@ func (p *Peer) enqueueFrame(ctx context.Context, frame Frame) error {
 	case <-p.done:
 		return ErrConnClosed
 	case p.outgoing <- frame:
+		timer.ObserveDuration()
 		p.Metrics.incFrameSent(frame.FrameKind().String())
 		return nil
 	}

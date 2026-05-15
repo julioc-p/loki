@@ -50,7 +50,7 @@ func partitionRecordBatch(rec arrow.RecordBatch, routing *workflow.SinkRouting, 
 
 // computeLabelHashShards computes the shard index for each row based on grouping labels.
 func computeLabelHashShards(rec arrow.RecordBatch, grouping physical.Grouping, numShards int, shardIndices []int) error {
-	if len(grouping.Columns) == 0 {
+	if len(grouping.Columns) == 0 && !grouping.Without {
 		// No grouping columns - all rows go to shard 0
 		return nil
 	}
@@ -59,7 +59,7 @@ func computeLabelHashShards(rec arrow.RecordBatch, grouping physical.Grouping, n
 	// We need an evaluator for collectByGroupingColumns, but for sharding we can use a simple one
 	// that just looks up column references
 	evaluator := &simpleEvaluatorForSharding{rec: rec}
-	arrays, fields, err := executor.CollectByGroupingColumns(rec, grouping, evaluator)
+	arrays, fields, err := executor.CollectGroupingColumns(rec, grouping, evaluator, semconv.NewIdentifierCache())
 	if err != nil {
 		// If we can't collect grouping columns, fall back to shard 0 for all rows
 		return nil

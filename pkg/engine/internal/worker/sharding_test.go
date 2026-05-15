@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -271,6 +272,77 @@ func TestComputeLabelHashShards_MultipleLabels(t *testing.T) {
 		require.GreaterOrEqual(t, idx, 0)
 		require.Less(t, idx, 3)
 	}
+}
+
+func TestComputeLabelHashShards_WithoutGrouping(t *testing.T) {
+	const numShards = 16
+
+	fooValues := []string{"foo-0", ""}
+	for i := 1; i < 100; i++ {
+		candidateValues := []string{"foo-0", fmt.Sprintf("foo-%d", i)}
+		rec := createWithoutGroupingTestRecordBatch(t, candidateValues)
+
+		fooShardIndices := make([]int, rec.NumRows())
+		err := computeLabelHashShards(rec, physical.Grouping{
+			Columns: []physical.ColumnExpression{
+				&physical.ColumnExpr{Ref: types.ColumnRef{Column: "foo", Type: types.ColumnTypeLabel}},
+			},
+		}, numShards, fooShardIndices)
+		rec.Release()
+		require.NoError(t, err)
+
+		if fooShardIndices[0] != fooShardIndices[1] {
+			fooValues = candidateValues
+			break
+		}
+	}
+	require.NotEmpty(t, fooValues[1])
+
+	rec := createWithoutGroupingTestRecordBatch(t, fooValues)
+	defer rec.Release()
+
+	shardIndices := make([]int, rec.NumRows())
+	err := computeLabelHashShards(rec, physical.Grouping{
+		Without: true,
+		Columns: []physical.ColumnExpression{
+			&physical.ColumnExpr{Ref: types.ColumnRef{Column: "foo", Type: types.ColumnTypeLabel}},
+		},
+	}, numShards, shardIndices)
+	require.NoError(t, err)
+
+	// `without (foo)` groups both rows by their shared app label, ignoring foo.
+	require.Equal(t, shardIndices[0], shardIndices[1])
+}
+
+func createWithoutGroupingTestRecordBatch(t *testing.T, fooValues []string) arrow.RecordBatch {
+	t.Helper()
+
+	alloc := memory.NewGoAllocator()
+	timestampFQN := semconv.ColumnIdentTimestamp.FQN()
+	appFQN := semconv.NewIdentifier("app", types.ColumnTypeLabel, types.Loki.String).FQN()
+	fooFQN := semconv.NewIdentifier("foo", types.ColumnTypeLabel, types.Loki.String).FQN()
+
+	schema := arrow.NewSchema([]arrow.Field{
+		{Name: timestampFQN, Type: arrow.FixedWidthTypes.Timestamp_ns},
+		{Name: appFQN, Type: arrow.BinaryTypes.String},
+		{Name: fooFQN, Type: arrow.BinaryTypes.String},
+	}, nil)
+
+	tsBuilder := array.NewTimestampBuilder(alloc, arrow.FixedWidthTypes.Timestamp_ns.(*arrow.TimestampType))
+	appBuilder := array.NewStringBuilder(alloc)
+	fooBuilder := array.NewStringBuilder(alloc)
+
+	for i, fooValue := range fooValues {
+		tsBuilder.Append(arrow.Timestamp(time.Unix(int64(i+1), 0).UnixNano()))
+		appBuilder.Append("web")
+		fooBuilder.Append(fooValue)
+	}
+
+	return array.NewRecordBatch(schema, []arrow.Array{
+		tsBuilder.NewArray(),
+		appBuilder.NewArray(),
+		fooBuilder.NewArray(),
+	}, int64(len(fooValues)))
 }
 
 func TestComputeTimeShards_NoTimeRanges(t *testing.T) {

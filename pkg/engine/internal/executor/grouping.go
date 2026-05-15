@@ -20,7 +20,16 @@ type ExpressionEvaluatorForGrouping interface {
 }
 
 func collectGroupingColumns(record arrow.RecordBatch, grouping physical.Grouping, evaluator *expressionEvaluator, identCache *semconv.IdentifierCache) ([]*array.String, []arrow.Field, error) {
+	return CollectGroupingColumns(record, grouping, evaluator, identCache)
+}
+
+// CollectGroupingColumns collects grouping columns from a record batch, respecting
+// both by and without grouping modes.
+func CollectGroupingColumns(record arrow.RecordBatch, grouping physical.Grouping, evaluator ExpressionEvaluatorForGrouping, identCache *semconv.IdentifierCache) ([]*array.String, []arrow.Field, error) {
 	if grouping.Without {
+		if identCache == nil {
+			identCache = semconv.NewIdentifierCache()
+		}
 		return collectWithoutGroupingColumns(record, grouping, identCache)
 	}
 	return CollectByGroupingColumns(record, grouping, evaluator)

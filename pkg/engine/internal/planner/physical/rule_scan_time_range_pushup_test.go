@@ -118,6 +118,34 @@ func TestScanTimeRangePushup(t *testing.T) {
 		expected := PrintAsTree(expectedPlan)
 		require.Equal(t, expected, actual)
 	})
+	t.Run("scan time range start after range aggregation end does not invert range", func(t *testing.T) {
+		plan := &Plan{}
+		var rangeAgg *RangeAggregation
+		{
+			dataObjScan := plan.graph.Add(&DataObjScan{MaxTimeRange: TimeRange{
+				Start: time.Unix(20, 0).UTC(),
+				End:   time.Unix(30, 0).UTC(),
+			}})
+			rangeAgg = &RangeAggregation{
+				Start: time.Unix(5, 0).UTC(),
+				End:   time.Unix(10, 0).UTC(),
+				Step:  3 * time.Second, Range: 0,
+			}
+			_ = plan.graph.AddEdge(dag.Edge[Node]{Parent: plan.graph.Add(rangeAgg), Child: dataObjScan})
+		}
+
+		// apply optimisations
+		optimizations := []*Optimization{
+			newOptimization("scan time range pushup", plan).withRules(
+				&scanTimeRangePushup{plan: plan},
+			),
+		}
+		o := NewOptimizer(plan, optimizations)
+		o.Optimize(plan.Roots()[0])
+
+		require.Equal(t, time.Unix(10, 0).UTC(), rangeAgg.Start)
+		require.Equal(t, time.Unix(10, 0).UTC(), rangeAgg.End)
+	})
 	t.Run("step of zero means no rounding of scan time range in RangeAggregation", func(t *testing.T) {
 		plan := &Plan{}
 		{

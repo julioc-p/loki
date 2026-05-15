@@ -56,8 +56,12 @@ func (r *scanTimeRangePushup) applyToTargets(node Node, timeRange TimeRange) boo
 				steps := endPlusRange.Sub(trSteppedEnd)/node.Step + 1
 				trSteppedEnd = trSteppedEnd.Add(steps * node.Step)
 			}
-			if node.Start.Compare(trSteppedStart) < 0 {
-				node.Start = trSteppedStart
+			newStart := trSteppedStart
+			if newStart.Compare(node.End) > 0 {
+				newStart = node.End
+			}
+			if node.Start.Compare(newStart) < 0 {
+				node.Start = newStart
 				changed = true
 			}
 			// trSteppedEnd could still be before node.Start; make sure it isn't

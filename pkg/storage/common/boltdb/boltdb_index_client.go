@@ -37,8 +37,6 @@ const (
 
 // >>>>> COPIED FROM pkg/storage/stores/series/index/index.go
 
-const sep = "\xff"
-
 // QueryPagesCallback from an IndexQuery.
 type QueryPagesCallback func(Query, ReadBatchResult) bool
 

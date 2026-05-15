@@ -273,6 +273,30 @@ func TestComputeLabelHashShards_MultipleLabels(t *testing.T) {
 	}
 }
 
+func TestComputeLabelHashShards_MissingGroupingColumn(t *testing.T) {
+	labels := map[string][]string{
+		"app": {"web", "api", "web"},
+	}
+
+	rec := createTestRecordBatch(t, 3, []time.Time{
+		time.Unix(10, 0), time.Unix(20, 0), time.Unix(30, 0),
+	}, labels)
+	defer rec.Release()
+
+	shardIndices := make([]int, rec.NumRows())
+	grouping := physical.Grouping{
+		Columns: []physical.ColumnExpression{
+			&physical.ColumnExpr{Ref: types.ColumnRef{Column: "app", Type: types.ColumnTypeLabel}},
+			&physical.ColumnExpr{Ref: types.ColumnRef{Column: "missing", Type: types.ColumnTypeLabel}},
+		},
+	}
+
+	require.NotPanics(t, func() {
+		require.NoError(t, computeLabelHashShards(rec, grouping, 3, shardIndices))
+	})
+	require.Equal(t, shardIndices[0], shardIndices[2])
+}
+
 func TestComputeTimeShards_NoTimeRanges(t *testing.T) {
 	rec := createTimestampRecordBatch(t, []time.Time{
 		time.Unix(10, 0),
@@ -594,6 +618,7 @@ func TestSimpleEvaluatorForSharding(t *testing.T) {
 	defer rec.Release()
 
 	eval := &simpleEvaluatorForSharding{rec: rec}
+	defer eval.release()
 
 	t.Run("column expression returns array", func(t *testing.T) {
 		colExpr := &physical.ColumnExpr{
@@ -609,23 +634,28 @@ func TestSimpleEvaluatorForSharding(t *testing.T) {
 		require.Equal(t, "api", strArr.Value(1))
 	})
 
-	t.Run("non-column expression returns nil", func(t *testing.T) {
+	t.Run("non-column expression returns error", func(t *testing.T) {
 		// Use a non-column expression
 		literalExpr := physical.NewLiteral("test")
 
 		arr, err := eval.EvalForGrouping(literalExpr, rec)
-		require.NoError(t, err)
+		require.Error(t, err)
 		require.Nil(t, arr)
 	})
 
-	t.Run("non-existent column returns nil", func(t *testing.T) {
+	t.Run("non-existent column returns null array", func(t *testing.T) {
 		colExpr := &physical.ColumnExpr{
 			Ref: types.ColumnRef{Column: "nonexistent", Type: types.ColumnTypeLabel},
 		}
 
 		arr, err := eval.EvalForGrouping(colExpr, rec)
 		require.NoError(t, err)
-		require.Nil(t, arr)
+		require.NotNil(t, arr)
+
+		strArr := arr.(*array.String)
+		require.Equal(t, 2, strArr.Len())
+		require.True(t, strArr.IsNull(0))
+		require.True(t, strArr.IsNull(1))
 	})
 }
 

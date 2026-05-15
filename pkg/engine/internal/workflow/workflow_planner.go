@@ -996,14 +996,6 @@ func (p *planner) processShardedAggregation(node physical.Node) ([]*Task, *SinkR
 		shardPlan := baseAggTask.Fragment.Graph().Clone()
 		shardFragment := physical.FromGraph(*shardPlan)
 
-		// Apply batching if configured
-		if p.batchSize > 0 {
-			var err error
-			if shardFragment, err = physical.WrapWithBatching(shardFragment, p.batchSize); err != nil {
-				return nil, nil, fmt.Errorf("wrapping shard with batching: %w", err)
-			}
-		}
-
 		// Set MaxTimeRange based on sharding strategy
 		var maxTimeRange physical.TimeRange
 		if routing.Strategy == SinkRoutingStrategyTimeShard {

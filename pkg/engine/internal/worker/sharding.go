@@ -2,6 +2,7 @@ package worker
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/apache/arrow-go/v18/arrow/array"
@@ -58,6 +59,7 @@ func computeLabelHashShards(rec arrow.RecordBatch, grouping physical.Grouping, n
 	// We need an evaluator for collectByGroupingColumns, but for sharding we can use a simple one
 	// that just looks up column references
 	evaluator := &simpleEvaluatorForSharding{rec: rec}
+	defer evaluator.release()
 	arrays, fields, err := executor.CollectByGroupingColumns(rec, grouping, evaluator)
 	if err != nil {
 		// If we can't collect grouping columns, fall back to shard 0 for all rows
@@ -82,13 +84,14 @@ func computeLabelHashShards(rec arrow.RecordBatch, grouping physical.Grouping, n
 // simpleEvaluatorForSharding is a minimal expression evaluator that only supports
 // column reference lookups for use in sharding.
 type simpleEvaluatorForSharding struct {
-	rec arrow.RecordBatch
+	rec        arrow.RecordBatch
+	nullArrays []arrow.Array
 }
 
 func (e *simpleEvaluatorForSharding) EvalForGrouping(expr physical.Expression, rec arrow.RecordBatch) (arrow.Array, error) {
 	colExpr, ok := expr.(*physical.ColumnExpr)
 	if !ok {
-		return nil, nil
+		return nil, fmt.Errorf("unsupported grouping expression %T", expr)
 	}
 
 	// Find the column by name (FQN)
@@ -103,7 +106,25 @@ func (e *simpleEvaluatorForSharding) EvalForGrouping(expr physical.Expression, r
 		}
 	}
 
-	return nil, nil
+	arr := newNullStringArray(int(rec.NumRows()))
+	e.nullArrays = append(e.nullArrays, arr)
+	return arr, nil
+}
+
+func (e *simpleEvaluatorForSharding) release() {
+	for _, arr := range e.nullArrays {
+		arr.Release()
+	}
+}
+
+func newNullStringArray(rows int) arrow.Array {
+	b := array.NewStringBuilder(memory.DefaultAllocator)
+	defer b.Release()
+	b.Reserve(rows)
+	for range rows {
+		b.AppendNull()
+	}
+	return b.NewArray()
 }
 
 // computeTimeShards computes the shard index for each row based on timestamp.

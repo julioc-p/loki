@@ -13,7 +13,7 @@ import (
 
 const maxStackSize = 8 * 1024
 
-var tracer = otel.Tracer("pkg/storage/chunk/client/local")
+var tracer = otel.Tracer("pkg/storage/common/boltdb")
 
 func BuildIndexFileName(tableName, uploader, dbName string) string {
 	// Files are stored with <uploader>-<db-name>

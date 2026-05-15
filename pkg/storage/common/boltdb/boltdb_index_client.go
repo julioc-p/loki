@@ -99,36 +99,6 @@ type Query struct {
 	Immutable bool
 }
 
-// Entry describes an entry in the chunk index
-type Entry struct {
-	TableName string
-	HashValue string
-
-	// For writes, RangeValue will always be set.
-	RangeValue []byte
-
-	// New for v6 schema, label value is not written as part of the range key.
-	Value []byte
-}
-
-func QueryKey(q Query) string {
-	ret := q.TableName + sep + q.HashValue
-
-	if len(q.RangeValuePrefix) != 0 {
-		ret += sep + string(q.RangeValuePrefix)
-	}
-
-	if len(q.RangeValueStart) != 0 {
-		ret += sep + string(q.RangeValueStart)
-	}
-
-	if len(q.ValueEqual) != 0 {
-		ret += sep + string(q.ValueEqual)
-	}
-
-	return ret
-}
-
 // <<<<< END
 
 // Config for a BoltDB index client.

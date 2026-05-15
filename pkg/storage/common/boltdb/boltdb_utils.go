@@ -15,18 +15,6 @@ const maxStackSize = 8 * 1024
 
 var tracer = otel.Tracer("pkg/storage/common/boltdb")
 
-func BuildIndexFileName(tableName, uploader, dbName string) string {
-	// Files are stored with <uploader>-<db-name>
-	objectKey := fmt.Sprintf("%s-%s", uploader, dbName)
-
-	// if the file is a migrated one then don't add its name to the object key otherwise we would re-upload them again here with a different name.
-	if tableName == dbName {
-		objectKey = uploader
-	}
-
-	return objectKey
-}
-
 type result struct {
 	boltdb *bbolt.DB
 	err    error

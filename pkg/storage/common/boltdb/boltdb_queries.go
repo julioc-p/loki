@@ -166,10 +166,6 @@ func doParallelQueries(ctx context.Context, queryIndex QueryIndexFunc, queries [
 	})
 }
 
-func GetUnsafeBytes(s string) []byte {
-	return *((*[]byte)(unsafe.Pointer(&s))) // #nosec G103 -- we know the string is not mutated -- nosemgrep: use-of-unsafe-block
-}
-
 func GetUnsafeString(buf []byte) string {
 	return *((*string)(unsafe.Pointer(&buf))) // #nosec G103 -- we know the string is not mutated -- nosemgrep: use-of-unsafe-block
 }

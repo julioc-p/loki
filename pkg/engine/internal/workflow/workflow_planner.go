@@ -1031,21 +1031,21 @@ func (p *planner) processShardedAggregation(node physical.Node) ([]*Task, *SinkR
 		// Set sink routing on child so it knows how to route to shards
 		childTask.SinkRouting = routing
 
-		// Create N-1 additional streams from this child to the other shards
-		// (it already has 1 stream to baseAggTask from the initial processNode call)
+		// Create N-1 additional streams from this child to the other shards.
+		// Each stream must connect to the same source node as the base stream
+		// from this child to baseAggTask.
 		for i := 1; i < numShards; i++ {
-			stream := &Stream{ULID: ulid.Make(), TenantID: p.tenantID}
-			if err := p.addSink(childTask, stream); err != nil {
-				return nil, nil, err
-			}
-
-			// Add this stream as a source to the shard task
 			shardTask := allShardTasks[i]
-			// Find the node in the shard that should receive this stream
-			// It should match the same node in baseAggTask that receives streams
 			for baseNode, baseStreams := range baseAggTask.Sources {
-				if len(baseStreams) > 0 {
-					// Find corresponding node in shard
+				for _, baseStream := range baseStreams {
+					if p.streamWriters[baseStream] != childTask {
+						continue
+					}
+
+					stream := &Stream{ULID: ulid.Make(), TenantID: p.tenantID}
+					if err := p.addSink(childTask, stream); err != nil {
+						return nil, nil, err
+					}
 					shardTask.Sources[baseNode] = append(shardTask.Sources[baseNode], stream)
 				}
 			}

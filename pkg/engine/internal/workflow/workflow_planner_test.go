@@ -1616,6 +1616,52 @@ func Test_shardingAndParallelization(t *testing.T) {
 	})
 }
 
+func TestProcessShardedAggregationConnectsShardStreamsToMatchingSourceNodes(t *testing.T) {
+	var physicalGraph dag.Graph[physical.Node]
+
+	sortBy := &physical.ColumnExpr{Ref: types.ColumnRef{Column: "value", Type: types.ColumnTypeGenerated}}
+	vectorAgg := physicalGraph.Add(&physical.VectorAggregation{
+		Operation: types.VectorAggregationTypeSum,
+		Grouping:  physical.Grouping{},
+	})
+	project := physicalGraph.Add(&physical.Projection{All: true})
+	filter := physicalGraph.Add(&physical.Filter{})
+	projectTopK := physicalGraph.Add(&physical.TopK{SortBy: sortBy, K: 1})
+	filterTopK := physicalGraph.Add(&physical.TopK{SortBy: sortBy, K: 1})
+	projectScan := physicalGraph.Add(&physical.DataObjScan{})
+	filterScan := physicalGraph.Add(&physical.DataObjScan{})
+
+	_ = physicalGraph.AddEdge(dag.Edge[physical.Node]{Parent: vectorAgg, Child: project})
+	_ = physicalGraph.AddEdge(dag.Edge[physical.Node]{Parent: vectorAgg, Child: filter})
+	_ = physicalGraph.AddEdge(dag.Edge[physical.Node]{Parent: project, Child: projectTopK})
+	_ = physicalGraph.AddEdge(dag.Edge[physical.Node]{Parent: filter, Child: filterTopK})
+	_ = physicalGraph.AddEdge(dag.Edge[physical.Node]{Parent: projectTopK, Child: projectScan})
+	_ = physicalGraph.AddEdge(dag.Edge[physical.Node]{Parent: filterTopK, Child: filterScan})
+
+	p := &planner{
+		labelHashShardCount: 2,
+		physical:            physical.FromGraph(physicalGraph),
+		streamWriters:       make(map[*Stream]*Task),
+	}
+
+	tasks, routing, err := p.processShardedAggregation(vectorAgg)
+	require.NoError(t, err)
+	require.NotNil(t, routing)
+	require.Len(t, tasks, 2)
+
+	baseAggTask := tasks[0]
+	shardTask := tasks[1]
+	require.Len(t, baseAggTask.Sources[project], 1)
+	require.Len(t, baseAggTask.Sources[filter], 1)
+	require.Len(t, shardTask.Sources[project], 1)
+	require.Len(t, shardTask.Sources[filter], 1)
+
+	baseProjectWriter := p.streamWriters[baseAggTask.Sources[project][0]]
+	baseFilterWriter := p.streamWriters[baseAggTask.Sources[filter][0]]
+	require.Same(t, baseProjectWriter, p.streamWriters[shardTask.Sources[project][0]])
+	require.Same(t, baseFilterWriter, p.streamWriters[shardTask.Sources[filter][0]])
+}
+
 func TestCalculateAlignedTimeShardsIncludesLeadingPartialShard(t *testing.T) {
 	start := time.Date(2026, time.January, 1, 1, 0, 0, 0, time.UTC)
 	end := start.Add(25 * time.Hour)

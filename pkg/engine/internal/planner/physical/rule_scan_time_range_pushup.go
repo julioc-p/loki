@@ -48,14 +48,11 @@ func (r *scanTimeRangePushup) applyToTargets(node Node, timeRange TimeRange) boo
 	switch node := node.(type) {
 	case *RangeAggregation:
 		if node.Step > 0 { // only apply optimization to range queries
-			trSteppedStart := time.UnixMilli((timeRange.Start.UnixNano() / node.Step.Nanoseconds()) * node.Step.Nanoseconds() / 1000000).UTC()
+			originalStart := node.Start
+			trSteppedStart := alignTimestampOnOrAfter(originalStart, timeRange.Start, node.Step)
 
 			endPlusRange := timeRange.End.Add(node.Range)
-			trSteppedEnd := time.UnixMilli((endPlusRange.UnixNano() / node.Step.Nanoseconds()) * node.Step.Nanoseconds() / 1000000).UTC()
-			if trSteppedEnd.Compare(endPlusRange) < 0 {
-				steps := endPlusRange.Sub(trSteppedEnd)/node.Step + 1
-				trSteppedEnd = trSteppedEnd.Add(steps * node.Step)
-			}
+			trSteppedEnd := alignTimestampOnOrAfter(originalStart, endPlusRange, node.Step)
 			if node.Start.Compare(trSteppedStart) < 0 {
 				node.Start = trSteppedStart
 				changed = true
@@ -80,4 +77,17 @@ func (r *scanTimeRangePushup) applyToTargets(node Node, timeRange TimeRange) boo
 		}
 	}
 	return changed
+}
+
+func alignTimestampOnOrAfter(start, target time.Time, step time.Duration) time.Time {
+	if !target.After(start) {
+		return start.UTC()
+	}
+
+	steps := target.Sub(start) / step
+	aligned := start.Add(steps * step)
+	if aligned.Before(target) {
+		aligned = aligned.Add(step)
+	}
+	return aligned.UTC()
 }

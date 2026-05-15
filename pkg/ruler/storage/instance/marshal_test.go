@@ -27,3 +27,11 @@ func TestUnmarshalConfig_Invalid(t *testing.T) {
 	_, err := UnmarshalConfig(strings.NewReader(invalidConfigContent))
 	require.Error(t, err)
 }
+
+func TestMarshalConfig(t *testing.T) {
+	cfg := DefaultConfig
+
+	content, err := MarshalConfig(&cfg, false)
+	require.NoError(t, err)
+	require.Contains(t, string(content), "truncate_frequency:")
+}

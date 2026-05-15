@@ -30,7 +30,11 @@ func MarshalConfig(c *Config, scrubSecrets bool) ([]byte, error) {
 // MarshalConfigToWriter marshals a config to an io.Writer.
 func MarshalConfigToWriter(c *Config, w io.Writer, _ bool) error {
 	enc := yaml.NewEncoder(w)
+	enc.SetIndent(2)
 
 	type plain Config
-	return enc.Encode((*plain)(c))
+	if err := enc.Encode((*plain)(c)); err != nil {
+		return err
+	}
+	return enc.Close()
 }

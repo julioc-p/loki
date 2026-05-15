@@ -1,6 +1,7 @@
 package loki
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -14,7 +15,7 @@ import (
 )
 
 func yamlMarshalUnmarshal(in interface{}) (map[interface{}]interface{}, error) {
-	yamlBytes, err := yaml.Marshal(in)
+	yamlBytes, err := marshalYAML(in)
 	if err != nil {
 		return nil, err
 	}
@@ -25,6 +26,19 @@ func yamlMarshalUnmarshal(in interface{}) (map[interface{}]interface{}, error) {
 	}
 
 	return object, nil
+}
+
+func marshalYAML(v any) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+	if err := enc.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 func diffConfig(defaultConfig, actualConfig map[interface{}]interface{}) (map[interface{}]interface{}, error) {
@@ -215,7 +229,7 @@ func writeYAMLResponse(w http.ResponseWriter, v any) {
 	// YAML is displayed in the browser instead of offered as a download
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 
-	data, err := yaml.Marshal(v)
+	data, err := marshalYAML(v)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

@@ -157,7 +157,7 @@ func TestIndexDeduper(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Run("sync", func(t *testing.T) {
 				actualValues := map[string][][]byte{}
-				deduper := NewSyncCallbackDeduper(func(query Query, readBatch ReadBatchResult) bool {
+				deduper := newSyncCallbackDeduper(func(query Query, readBatch ReadBatchResult) bool {
 					itr := readBatch.Iterator()
 					for itr.Next() {
 						actualValues[query.HashValue] = append(actualValues[query.HashValue], itr.RangeValue())
@@ -174,7 +174,7 @@ func TestIndexDeduper(t *testing.T) {
 
 			t.Run("nosync", func(t *testing.T) {
 				actualValues := map[string][][]byte{}
-				deduper := NewCallbackDeduper(func(query Query, readBatch ReadBatchResult) bool {
+				deduper := newCallbackDeduper(func(query Query, readBatch ReadBatchResult) bool {
 					itr := readBatch.Iterator()
 					for itr.Next() {
 						actualValues[query.HashValue] = append(actualValues[query.HashValue], itr.RangeValue())
@@ -226,7 +226,7 @@ func (b batchIterator) Value() []byte {
 }
 
 func Benchmark_DedupeCallback(b *testing.B) {
-	deduper := NewCallbackDeduper(func(_ Query, readBatch ReadBatchResult) bool {
+	deduper := newCallbackDeduper(func(_ Query, readBatch ReadBatchResult) bool {
 		itr := readBatch.Iterator()
 		for itr.Next() {
 			_ = itr.RangeValue()

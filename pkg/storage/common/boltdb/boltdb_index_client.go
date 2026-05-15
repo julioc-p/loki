@@ -35,28 +35,14 @@ const (
 	openBoltDBFileTimeout = 5 * time.Second
 )
 
-// >>>>> COPIED FROM pkg/storage/stores/series/index/index.go
-
-const sep = "\xff"
-
 // QueryPagesCallback from an IndexQuery.
 type QueryPagesCallback func(Query, ReadBatchResult) bool
 
-// Client for the read path.
-type ReadClient interface {
-	QueryPages(ctx context.Context, queries []Query, callback QueryPagesCallback) error
-}
-
-// Client for the write path.
-type WriteClient interface {
-	NewWriteBatch() WriteBatch
-	BatchWrite(context.Context, WriteBatch) error
-}
-
 // Client is a client for the storage of the index (e.g. DynamoDB).
 type Client interface {
-	ReadClient
-	WriteClient
+	QueryPages(ctx context.Context, queries []Query, callback QueryPagesCallback) error
+	NewWriteBatch() WriteBatch
+	BatchWrite(context.Context, WriteBatch) error
 	Stop()
 }
 
@@ -98,38 +84,6 @@ type Query struct {
 	// If the result of this lookup is immutable or not (for caching).
 	Immutable bool
 }
-
-// Entry describes an entry in the chunk index
-type Entry struct {
-	TableName string
-	HashValue string
-
-	// For writes, RangeValue will always be set.
-	RangeValue []byte
-
-	// New for v6 schema, label value is not written as part of the range key.
-	Value []byte
-}
-
-func QueryKey(q Query) string {
-	ret := q.TableName + sep + q.HashValue
-
-	if len(q.RangeValuePrefix) != 0 {
-		ret += sep + string(q.RangeValuePrefix)
-	}
-
-	if len(q.RangeValueStart) != 0 {
-		ret += sep + string(q.RangeValueStart)
-	}
-
-	if len(q.ValueEqual) != 0 {
-		ret += sep + string(q.ValueEqual)
-	}
-
-	return ret
-}
-
-// <<<<< END
 
 // Config for a BoltDB index client.
 type Config struct {

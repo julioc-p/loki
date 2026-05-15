@@ -13,26 +13,12 @@ const (
 	maxConcurrency  = 10
 )
 
-type QueryIndexFunc func(ctx context.Context, queries []Query, callback QueryPagesCallback) error
+type queryIndexFunc func(ctx context.Context, queries []Query, callback QueryPagesCallback) error
 
-// QueriesByTable groups and returns queries by tables.
-func QueriesByTable(queries []Query) map[string][]Query {
-	queriesByTable := make(map[string][]Query)
-	for _, query := range queries {
-		if _, ok := queriesByTable[query.TableName]; !ok {
-			queriesByTable[query.TableName] = []Query{}
-		}
-
-		queriesByTable[query.TableName] = append(queriesByTable[query.TableName], query)
-	}
-
-	return queriesByTable
-}
-
-// NewSyncCallbackDeduper should always be used on table level not the whole query level because it just looks at range values which can be repeated across tables
-// NewSyncCallbackDeduper is safe to used by multiple goroutines
+// newSyncCallbackDeduper should always be used on table level not the whole query level because it just looks at range values which can be repeated across tables
+// newSyncCallbackDeduper is safe to used by multiple goroutines
 // Cortex anyways dedupes entries across tables
-func NewSyncCallbackDeduper(callback QueryPagesCallback, queries int) QueryPagesCallback {
+func newSyncCallbackDeduper(callback QueryPagesCallback, queries int) QueryPagesCallback {
 	syncMap := &syncMap{
 		seen: make(map[string]map[string]struct{}, queries),
 	}
@@ -45,10 +31,10 @@ func NewSyncCallbackDeduper(callback QueryPagesCallback, queries int) QueryPages
 	}
 }
 
-// NewCallbackDeduper should always be used on table level not the whole query level because it just looks at range values which can be repeated across tables
-// NewCallbackDeduper is safe not to used by multiple goroutines
+// newCallbackDeduper should always be used on table level not the whole query level because it just looks at range values which can be repeated across tables
+// newCallbackDeduper is safe not to used by multiple goroutines
 // Cortex anyways dedupes entries across tables
-func NewCallbackDeduper(callback QueryPagesCallback, queries int) QueryPagesCallback {
+func newCallbackDeduper(callback QueryPagesCallback, queries int) QueryPagesCallback {
 	f := &readBatchDeduper{
 		seen: make(map[string]map[string]struct{}, queries),
 	}
@@ -148,26 +134,22 @@ func (f *readBatchDeduperSync) Next() bool {
 // * pkg/storage/chunk/client/util/util.go
 // * pkg/storage/stores/shipper/indexshipper/util/queries.go
 // This function comes fro the latter.
-func doParallelQueries(ctx context.Context, queryIndex QueryIndexFunc, queries []Query, callback QueryPagesCallback) error {
+func doParallelQueries(ctx context.Context, queryIndex queryIndexFunc, queries []Query, callback QueryPagesCallback) error {
 	if len(queries) == 0 {
 		return nil
 	}
 	if len(queries) <= maxQueriesBatch {
-		return queryIndex(ctx, queries, NewCallbackDeduper(callback, len(queries)))
+		return queryIndex(ctx, queries, newCallbackDeduper(callback, len(queries)))
 	}
 
 	jobsCount := len(queries) / maxQueriesBatch
 	if len(queries)%maxQueriesBatch != 0 {
 		jobsCount++
 	}
-	callback = NewSyncCallbackDeduper(callback, len(queries))
+	callback = newSyncCallbackDeduper(callback, len(queries))
 	return concurrency.ForEachJob(ctx, jobsCount, maxConcurrency, func(ctx context.Context, idx int) error {
 		return queryIndex(ctx, queries[idx*maxQueriesBatch:min((idx+1)*maxQueriesBatch, len(queries))], callback)
 	})
-}
-
-func GetUnsafeBytes(s string) []byte {
-	return *((*[]byte)(unsafe.Pointer(&s))) // #nosec G103 -- we know the string is not mutated -- nosemgrep: use-of-unsafe-block
 }
 
 func GetUnsafeString(buf []byte) string {

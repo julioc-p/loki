@@ -8,7 +8,6 @@ import (
 
 	"go.opentelemetry.io/otel"
 
-	"github.com/grafana/loki/v3/pkg/storage/types"
 	"github.com/grafana/loki/v3/pkg/util/httpreq"
 
 	lokilog "github.com/grafana/loki/v3/pkg/logql/log"
@@ -262,44 +261,41 @@ func (s *LokiStore) storeForPeriod(p config.PeriodConfig, tableRange config.Tabl
 	indexClientReg := prometheus.WrapRegistererWith(prometheus.Labels{"component": component}, s.registerer)
 	indexClientLogger := log.With(s.logger, "index-store", fmt.Sprintf("%s-%s", p.IndexType, p.From.String()))
 
-	if p.IndexType == types.IndexTypeTSDB {
-		if shouldUseIndexGatewayClient(s.cfg.TSDBShipperConfig) {
-			// inject the index-gateway client into the index store
-			gw, err := indexgateway.NewGatewayClient(s.cfg.TSDBShipperConfig.IndexGatewayClientConfig, indexClientReg, s.limits, indexClientLogger, s.metricsNamespace)
-			if err != nil {
-				return nil, nil, nil, err
-			}
-			idx := series.NewIndexGatewayClientStore(gw, indexClientLogger)
-
-			return failingChunkWriter{}, index.NewMonitoredReaderWriter(idx, indexClientReg), func() {
-				f.Stop()
-				gw.Stop()
-			}, nil
-		}
-
-		objectClient, err := NewObjectClient(p.ObjectType, component, s.cfg, s.clientMetrics)
+	if shouldUseIndexGatewayClient(s.cfg.TSDBShipperConfig) {
+		// inject the index-gateway client into the index store
+		gw, err := indexgateway.NewGatewayClient(s.cfg.TSDBShipperConfig.IndexGatewayClientConfig, indexClientReg, s.limits, indexClientLogger, s.metricsNamespace)
 		if err != nil {
 			return nil, nil, nil, err
 		}
+		idx := series.NewIndexGatewayClientStore(gw, indexClientLogger)
 
-		name := fmt.Sprintf("%s_%s", p.ObjectType, p.From.String())
-		indexReaderWriter, stopTSDBStoreFunc, err := tsdb.NewStore(name, p.IndexTables.PathPrefix, s.cfg.TSDBShipperConfig, s.schemaCfg, f, objectClient, s.limits, tableRange, indexClientReg, indexClientLogger)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-
-		indexReaderWriter = index.NewMonitoredReaderWriter(indexReaderWriter, indexClientReg)
-		chunkWriter := stores.NewChunkWriter(f, s.schemaCfg, indexReaderWriter, s.storeCfg.DisableIndexDeduplication)
-
-		return chunkWriter, indexReaderWriter,
-			func() {
-				f.Stop()
-				chunkClient.Stop()
-				stopTSDBStoreFunc()
-				objectClient.Stop()
-			}, nil
+		return failingChunkWriter{}, index.NewMonitoredReaderWriter(idx, indexClientReg), func() {
+			f.Stop()
+			gw.Stop()
+		}, nil
 	}
-	panic("using non-tsdb index")
+
+	objectClient, err := NewObjectClient(p.ObjectType, component, s.cfg, s.clientMetrics)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	name := fmt.Sprintf("%s_%s", p.ObjectType, p.From.String())
+	indexReaderWriter, stopTSDBStoreFunc, err := tsdb.NewStore(name, p.IndexTables.PathPrefix, s.cfg.TSDBShipperConfig, s.schemaCfg, f, objectClient, s.limits, tableRange, indexClientReg, indexClientLogger)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	indexReaderWriter = index.NewMonitoredReaderWriter(indexReaderWriter, indexClientReg)
+	chunkWriter := stores.NewChunkWriter(f, s.schemaCfg, indexReaderWriter, s.storeCfg.DisableIndexDeduplication)
+
+	return chunkWriter, indexReaderWriter,
+		func() {
+			f.Stop()
+			chunkClient.Stop()
+			stopTSDBStoreFunc()
+			objectClient.Stop()
+		}, nil
 }
 
 // decodeReq sanitizes an incoming request, rounds bounds, appends the __name__ matcher,

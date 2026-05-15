@@ -6,9 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-kit/log"
 	"github.com/grafana/dskit/flagext"
-	"github.com/prometheus/common/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -22,40 +20,9 @@ import (
 	"github.com/grafana/loki/v3/pkg/validation"
 )
 
-func TestFactoryStop(t *testing.T) {
-	var (
-		cfg          Config
-		storeConfig  config.ChunkStoreConfig
-		schemaConfig config.SchemaConfig
-		defaults     validation.Limits
-	)
-	flagext.DefaultValues(&cfg, &storeConfig, &schemaConfig, &defaults)
-	schemaConfig.Configs = []config.PeriodConfig{
-		{
-			From:      config.DayTime{Time: model.Time(0)},
-			IndexType: "inmemory",
-			Schema:    "v11",
-			RowShards: 16,
-		},
-		{
-			From:      config.DayTime{Time: model.Time(1)},
-			IndexType: "inmemory",
-			Schema:    "v9",
-		},
-	}
-
-	limits, err := validation.NewOverrides(defaults, nil)
-	require.NoError(t, err)
-	store, err := NewStore(cfg, storeConfig, schemaConfig, limits, cm, nil, log.NewNopLogger(), constants.Loki)
-	require.NoError(t, err)
-
-	store.Stop()
-}
-
 func TestNamedStores(t *testing.T) {
 	tempDir := t.TempDir()
 
-	// config for BoltDB Shipper
 	shipperCfg := indexshipper.Config{}
 	flagext.DefaultValues(&shipperCfg)
 	shipperCfg.ActiveIndexDirectory = path.Join(tempDir, "index")
